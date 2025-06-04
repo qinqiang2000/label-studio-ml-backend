@@ -271,7 +271,7 @@ class OpenAIInteractive(LabelStudioMLBase):
         regions = self._generate_response_regions(response, prompt_tag, choices_tag, textarea_tag, prompts)
 
         return PredictionValue(result=regions, score=0.1, model_version=str(self.model_version))
-
+    
     def predict(self, tasks: List[Dict], context: Optional[Dict] = None, **kwargs) -> ModelResponse:
         """
         """

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 LABEL_STUDIO_ACCESS_TOKEN = os.environ.get("LABEL_STUDIO_ACCESS_TOKEN")
 LABEL_STUDIO_HOST = os.environ.get("LABEL_STUDIO_HOST")
 
-client = genai.Client(api_key="AIzaSyCSxwAwe4aefBGX1PIleoFVDJYx-x-RfhA")
+client = genai.Client(api_key=os.environ.get("API_KEY"))
 # model = "gemini-2.5-flash-preview-05-20"
 model = "gemini-2.5-flash-preview-04-17"
 

@@ -18,6 +18,12 @@ logger = logging.getLogger(__name__)
 LABEL_STUDIO_ACCESS_TOKEN = os.environ.get("LABEL_STUDIO_ACCESS_TOKEN")
 LABEL_STUDIO_HOST = os.environ.get("LABEL_STUDIO_HOST")
 
+if os.environ.get('USING_PROXY', '').upper() == 'TRUE':
+    os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'
+    os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
+    os.environ['ALL_PROXY'] = 'socks5://127.0.0.1:7891'
+
+
 client = genai.Client(api_key=os.environ.get("API_KEY"))
 # model = "gemini-2.5-flash-preview-05-20"
 model = "gemini-2.5-flash-preview-04-17"

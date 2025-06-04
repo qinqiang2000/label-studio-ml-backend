@@ -78,7 +78,33 @@ class NewModel(LabelStudioMLBase):
             return match.group(1)
         return None
 
-    def generate(self, file_path):
+    def file_understanding(self, file_path):
+        my_file = client.files.upload(file=file_path)
+        
+        instruction = multi_page_prompt if file_path.lower().endswith('.pdf') and is_multi_page_pdf(file_path) else prompt
+        generate_content_config = types.GenerateContentConfig(
+            response_mime_type="text/plain",
+            system_instruction=[
+                types.Part.from_text(text=instruction),
+            ],
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        )
+        
+        contents = [my_file]
+        
+        logger.info(f'calling genai: {model}')
+        response = client.models.generate_content(
+            model=model,
+            contents=contents,
+            config=generate_content_config,
+        )
+        
+        text = extract_json(response.text)[0]   
+        logger.info(f'response: {text}')
+    
+        return text
+
+    def img_understanding(self, file_path):
         contents = [
             types.Part.from_bytes(
                 data=pathlib.Path(file_path).read_bytes(),
@@ -132,7 +158,7 @@ class NewModel(LabelStudioMLBase):
         filepath = self.get_local_path(url, task_id=task['id'])
         print(f'Local path: {filepath}')
         
-        text = self.generate(filepath)
+        text = self.file_understanding(filepath)
         
         result = {
             "id": str(uuid4())[:8],

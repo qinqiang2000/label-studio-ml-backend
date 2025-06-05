@@ -1,4 +1,3 @@
-import json
 import os
 import logging
 import re
@@ -12,6 +11,11 @@ from google.genai import types
 from google import genai
 from prompt import prompt, multi_page_prompt
 import PyPDF2
+import dotenv
+from utils import extract_json
+
+# Load .env if present
+dotenv.load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -43,27 +47,6 @@ def is_multi_page_pdf(file_path):
     except Exception as e:
         raise Exception(f"Error reading PDF: {file_path}, {e}")
 
-def extract_json(text) -> List[dict]:
-    """Extracts JSON content from a string where JSON is embedded between \`\`\`json and \`\`\` tags.
-
-    Parameters:
-        text (str): The text containing the JSON content.
-
-    Returns:
-        list: A list of extracted JSON strings.
-    """
-    # Define the regular expression pattern to match JSON blocks
-    pattern = r"\`\`\`json(.*?)\`\`\`"
-
-    # Find all non-overlapping matches of the pattern in the string
-    matches = re.findall(pattern, text, re.DOTALL)
-
-    # Return the list of matched JSON strings, stripping any leading or trailing whitespace
-    try:
-        return [match.strip() for match in matches]
-    except Exception:
-        raise ValueError(f"Failed to parse: {text}")
-    
 
 class NewModel(LabelStudioMLBase):
     MODEL_DIR = os.environ.get('MODEL_DIR', '.')
@@ -84,31 +67,31 @@ class NewModel(LabelStudioMLBase):
             return match.group(1)
         return None
 
-    def file_understanding(self, file_path):
-        my_file = client.files.upload(file=file_path)
+    # def file_understanding(self, file_path):
+    #     my_file = client.files.upload(file=file_path)
         
-        instruction = multi_page_prompt if file_path.lower().endswith('.pdf') and is_multi_page_pdf(file_path) else prompt
-        generate_content_config = types.GenerateContentConfig(
-            response_mime_type="text/plain",
-            system_instruction=[
-                types.Part.from_text(text=instruction),
-            ],
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
-        )
+    #     instruction = multi_page_prompt if file_path.lower().endswith('.pdf') and is_multi_page_pdf(file_path) else prompt
+    #     generate_content_config = types.GenerateContentConfig(
+    #         response_mime_type="text/plain",
+    #         system_instruction=[
+    #             types.Part.from_text(text=instruction),
+    #         ],
+    #         thinking_config=types.ThinkingConfig(thinking_budget=0),
+    #     )
         
-        contents = [my_file]
+    #     contents = [my_file]
         
-        logger.info(f'calling genai: {model}')
-        response = client.models.generate_content(
-            model=model,
-            contents=contents,
-            config=generate_content_config,
-        )
+    #     logger.info(f'calling genai: {model}')
+    #     response = client.models.generate_content(
+    #         model=model,
+    #         contents=contents,
+    #         config=generate_content_config,
+    #     )
         
-        text = extract_json(response.text)[0]   
-        logger.info(f'response: {text}')
+    #     text = extract_json(response.text)[0]   
+    #     logger.info(f'response: {text}')
     
-        return text
+    #     return text
 
     def img_understanding(self, file_path):
         contents = [
@@ -164,7 +147,7 @@ class NewModel(LabelStudioMLBase):
         filepath = self.get_local_path(url, task_id=task['id'])
         print(f'Local path: {filepath}')
         
-        text = self.file_understanding(filepath)
+        text = self.img_understanding(filepath)
         
         result = {
             "id": str(uuid4())[:8],

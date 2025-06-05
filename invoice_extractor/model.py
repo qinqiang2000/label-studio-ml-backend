@@ -20,7 +20,7 @@ dotenv.load_dotenv()
 logger = logging.getLogger(__name__)
 
 LABEL_STUDIO_ACCESS_TOKEN = os.environ.get("LABEL_STUDIO_ACCESS_TOKEN")
-LABEL_STUDIO_HOST = os.environ.get("LABEL_STUDIO_HOST")
+LABEL_STUDIO_HOST = os.environ.get("LABEL_STUDIO_URL")
 
 if os.environ.get('USING_PROXY', '').upper() == 'TRUE':
     os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'

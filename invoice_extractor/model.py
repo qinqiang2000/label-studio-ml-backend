@@ -12,7 +12,7 @@ from google import genai
 from prompt import prompt, multi_page_prompt
 import PyPDF2
 import dotenv
-from utils import extract_json
+from utils import extract_json, get_mock_invoice_data, should_use_mock_data
 
 # Load .env if present
 dotenv.load_dotenv()
@@ -67,33 +67,12 @@ class NewModel(LabelStudioMLBase):
             return match.group(1)
         return None
 
-    # def file_understanding(self, file_path):
-    #     my_file = client.files.upload(file=file_path)
-        
-    #     instruction = multi_page_prompt if file_path.lower().endswith('.pdf') and is_multi_page_pdf(file_path) else prompt
-    #     generate_content_config = types.GenerateContentConfig(
-    #         response_mime_type="text/plain",
-    #         system_instruction=[
-    #             types.Part.from_text(text=instruction),
-    #         ],
-    #         thinking_config=types.ThinkingConfig(thinking_budget=0),
-    #     )
-        
-    #     contents = [my_file]
-        
-    #     logger.info(f'calling genai: {model}')
-    #     response = client.models.generate_content(
-    #         model=model,
-    #         contents=contents,
-    #         config=generate_content_config,
-    #     )
-        
-    #     text = extract_json(response.text)[0]   
-    #     logger.info(f'response: {text}')
-    
-    #     return text
-
     def img_understanding(self, file_path):
+        # 检查是否使用仿真数据
+        if should_use_mock_data():
+            logger.info('Using mock data for img_understanding')
+            return get_mock_invoice_data()
+
         contents = [
             types.Part.from_bytes(
                 data=pathlib.Path(file_path).read_bytes(),
@@ -148,6 +127,7 @@ class NewModel(LabelStudioMLBase):
         print(f'Local path: {filepath}')
         
         text = self.img_understanding(filepath)
+        logger.info(f'img_understanding result: {text}')
         
         result = {
             "id": str(uuid4())[:8],
@@ -171,13 +151,13 @@ class NewModel(LabelStudioMLBase):
                 ModelResponse(predictions=predictions) with
                 predictions: [Predictions array in JSON format](https://labelstud.io/guide/export.html#Label-Studio-JSON-format-of-annotated-tasks)
         """
-        print(f'''\
-        Run prediction on {tasks}
-        Received context: {context}
-        Project ID: {self.project_id}
-        Label config: {self.label_config}
-        Parsed JSON Label config: {self.parsed_label_config}
-        Extra params: {self.extra_params} \n\n''')
+        # print(f'''\
+        # Run prediction on {tasks}
+        # Received context: {context}
+        # Project ID: {self.project_id}
+        # Label config: {self.label_config}
+        # Parsed JSON Label config: {self.parsed_label_config}
+        # Extra params: {self.extra_params} \n\n''')
         
         predictions = []
         failed_tasks = []

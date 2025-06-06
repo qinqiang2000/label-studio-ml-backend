@@ -192,15 +192,29 @@ class NewModel(LabelStudioMLBase):
                 else:
                     print(f"Warning: Task {i+1}/{len(tasks)} returned empty prediction")
             except Exception as e:
-                task_id = task.get('id', 'unknown')
-                error_msg = f"Failed to process task {i+1}/{len(tasks)} (id: {task_id}): {str(e)}"
-                print(error_msg)
-                logger.error(error_msg, exc_info=True)
-                failed_tasks.append({
-                    'task_index': i,
-                    'task_id': task_id,
-                    'error': str(e)
-                })
+                try:
+                    task_id = task.get('id', 'unknown') if isinstance(task, dict) else 'unknown'
+                    error_str = str(e) if e else 'Unknown error'
+                    error_msg = f"Failed to process task {i+1}/{len(tasks)} (id: {task_id}): {error_str}"
+                    print(error_msg)
+                    logger.error(error_msg, exc_info=True)
+                    failed_tasks.append({
+                        'task_index': i,
+                        'task_id': task_id,
+                        'error': error_str
+                    })
+                except Exception as log_error:
+                    # 如果连异常处理都失败了，至少要记录基本信息
+                    print(f"Critical error: Failed to log error for task {i+1}/{len(tasks)}: {log_error}")
+                    try:
+                        failed_tasks.append({
+                            'task_index': i,
+                            'task_id': 'error_in_error_handling',
+                            'error': f'Logging failed: {log_error}'
+                        })
+                    except:
+                        # 最后的保险措施
+                        print(f"Fatal error: Cannot even append to failed_tasks for task {i+1}")
                 # 继续处理下一个task，不中断整个批处理
                 continue
         

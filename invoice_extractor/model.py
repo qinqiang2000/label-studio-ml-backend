@@ -180,12 +180,46 @@ class NewModel(LabelStudioMLBase):
         Extra params: {self.extra_params} \n\n''')
         
         predictions = []
-        for task in tasks:            
-            prediction = self.predict_single(task)
-            if prediction:
-                predictions.append(prediction)
+        failed_tasks = []
         
-        # example for simple classification
+        for i, task in enumerate(tasks):
+            try:
+                print(f"Processing task {i+1}/{len(tasks)}, task_id: {task.get('id', 'unknown')}")
+                prediction = self.predict_single(task)
+                if prediction:
+                    predictions.append(prediction)
+                    print(f"Successfully processed task {i+1}/{len(tasks)}")
+                else:
+                    print(f"Warning: Task {i+1}/{len(tasks)} returned empty prediction")
+            except Exception as e:
+                task_id = task.get('id', 'unknown')
+                error_msg = f"Failed to process task {i+1}/{len(tasks)} (id: {task_id}): {str(e)}"
+                print(error_msg)
+                logger.error(error_msg, exc_info=True)
+                failed_tasks.append({
+                    'task_index': i,
+                    'task_id': task_id,
+                    'error': str(e)
+                })
+                # 继续处理下一个task，不中断整个批处理
+                continue
+        
+        # 记录处理结果统计
+        total_tasks = len(tasks)
+        successful_tasks = len(predictions)
+        failed_count = len(failed_tasks)
+        
+        print(f"\nBatch processing completed:")
+        print(f"Total tasks: {total_tasks}")
+        print(f"Successful: {successful_tasks}")
+        print(f"Failed: {failed_count}")
+        
+        if failed_tasks:
+            print(f"Failed task details:")
+            for failed_task in failed_tasks:
+                print(f"  - Task {failed_task['task_index']+1} (id: {failed_task['task_id']}): {failed_task['error']}")
+        
+        # 即使有部分失败，也返回成功处理的结果
         return ModelResponse(predictions=predictions)
     
     def fit(self, event, data, **kwargs):

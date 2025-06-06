@@ -5,6 +5,7 @@ __pycache__/
 
 .db
 *.db
+invoice_extractor/cache.db
 
 # C extensions
 *.so

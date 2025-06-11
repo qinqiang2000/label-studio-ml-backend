@@ -56,7 +56,7 @@ class NewModel(LabelStudioMLBase):
     def setup(self):
         """Configure any parameters of your model here
         """
-        self.set("model_version", "0.1")
+        self.set("model_version", "gemini-2.5-flash-preview-04-17")
 
     def extract_src_from_embed(self, embed_html):
         """Extract src attribute value from HTML embed tag"""
@@ -158,6 +158,8 @@ class NewModel(LabelStudioMLBase):
         # Label config: {self.label_config}
         # Parsed JSON Label config: {self.parsed_label_config}
         # Extra params: {self.extra_params} \n\n''')
+        # 打印kwargs参数内容
+        print(f"Received kwargs: {kwargs}")
         
         predictions = []
         failed_tasks = []

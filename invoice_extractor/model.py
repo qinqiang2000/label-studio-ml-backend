@@ -23,6 +23,7 @@ LABEL_STUDIO_ACCESS_TOKEN = os.environ.get("LABEL_STUDIO_ACCESS_TOKEN")
 LABEL_STUDIO_HOST = os.environ.get("LABEL_STUDIO_URL")
 
 if os.environ.get('USING_PROXY', '').upper() == 'TRUE':
+    print("使用Proxy！")
     os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'
     os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
     os.environ['ALL_PROXY'] = 'socks5://127.0.0.1:7891'
@@ -57,6 +58,7 @@ class NewModel(LabelStudioMLBase):
         """Configure any parameters of your model here
         """
         self.set("model_version", "gemini-2.5-flash-preview-04-17")
+        self.prompt=None
 
     def extract_src_from_embed(self, embed_html):
         """Extract src attribute value from HTML embed tag"""
@@ -83,7 +85,8 @@ class NewModel(LabelStudioMLBase):
                 ),
             )]
 
-        instruction = multi_page_prompt if file_path.lower().endswith('.pdf') and is_multi_page_pdf(file_path) else prompt
+        # instruction = multi_page_prompt if file_path.lower().endswith('.pdf') and is_multi_page_pdf(file_path) else prompt
+        instruction = self.prompt if self.prompt else prompt
         
         generate_content_config = types.GenerateContentConfig(
             response_mime_type="text/plain",
@@ -127,7 +130,6 @@ class NewModel(LabelStudioMLBase):
         print(f'Local path: {filepath}')
         
         text = self.img_understanding(filepath)
-        logger.info(f'img_understanding result: {text}')
         
         result = {
             "id": str(uuid4())[:8],
@@ -158,8 +160,8 @@ class NewModel(LabelStudioMLBase):
         # Label config: {self.label_config}
         # Parsed JSON Label config: {self.parsed_label_config}
         # Extra params: {self.extra_params} \n\n''')
-        # 打印kwargs参数内容
-        print(f"Received kwargs: {kwargs}")
+        self.prompt = kwargs.get('prompt') if kwargs else None
+        print(f"Received prompt: {self.prompt}")
         
         predictions = []
         failed_tasks = []

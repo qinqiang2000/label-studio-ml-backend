@@ -65,11 +65,15 @@ def _predict():
                         label_config=label_config)
 
     # model.use_label_config(label_config)
+    logger.info(f"API: Starting prediction for {len(tasks) if tasks else 0} tasks")
 
     response = model.predict(tasks, context=context, **params)
+    logger.info(f"API: Received response from model, type: {type(response)}")
 
     # if there is no model version we will take the default
     if isinstance(response, ModelResponse):
+        logger.info(f"API: Processing ModelResponse - has_errors: {response.has_errors()}, predictions_count: {len(response.predictions)}")
+        
         if not response.has_model_version():
             mv = model.model_version
             if mv:
@@ -77,16 +81,34 @@ def _predict():
         else:
             response.update_predictions_version()
 
-        response = response.model_dump()
+        # 序列化ModelResponse对象
+        response_dict = response.model_dump()
+        logger.info(f"API: Serialized response - predictions: {len(response_dict.get('predictions', []))}, errors: {len(response_dict.get('errors', []) or [])}")
+        
+        # 构建最终响应，包含预测结果和错误信息
+        final_response = {
+            'predictions': response_dict.get('predictions', []),
+            'model_version': response_dict.get('model_version')
+        }
+        
+        # 如果有错误信息，添加到响应中
+        if response_dict.get('errors'):
+            final_response['errors'] = response_dict['errors']
+            
+        logger.info(f"API: Final response structure - predictions: {len(final_response.get('predictions', []))}, errors: {len(final_response.get('errors', []) or [])}")
+        
+        return jsonify({'results': final_response})
+    else:
+        # 向后兼容：处理非ModelResponse格式的响应
+        logger.info(f"API: Processing legacy response format")
+        res = response
+        if res is None:
+            res = []
 
-    res = response
-    if res is None:
-        res = []
+        if isinstance(res, dict):
+            res = response.get("predictions", response)
 
-    if isinstance(res, dict):
-        res = response.get("predictions", response)
-
-    return jsonify({'results': res})
+        return jsonify({'results': res})
 
 
 @_server.route('/setup', methods=['POST'])

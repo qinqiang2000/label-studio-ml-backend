@@ -164,7 +164,10 @@ class NewModel(LabelStudioMLBase):
         print(f"Received prompt: {self.prompt}")
         
         predictions = []
-        failed_tasks = []
+        
+        # 创建ModelResponse对象，用于统一管理预测结果和错误信息
+        model_response = ModelResponse(predictions=[], model_version=str(self.model_version))
+        print(f"MODEL: Created ModelResponse with version: {self.model_version}")
         
         for i, task in enumerate(tasks):
             try:
@@ -175,6 +178,13 @@ class NewModel(LabelStudioMLBase):
                     print(f"Successfully processed task {i+1}/{len(tasks)}")
                 else:
                     print(f"Warning: Task {i+1}/{len(tasks)} returned empty prediction")
+                    # 空预测也算作一种错误
+                    model_response.add_error(
+                        task_index=i,
+                        task_id=task.get('id', 'unknown'),
+                        error_message="Model returned empty prediction",
+                        error_type="empty_prediction"
+                    )
             except Exception as e:
                 try:
                     task_id = task.get('id', 'unknown') if isinstance(task, dict) else 'unknown'
@@ -182,43 +192,65 @@ class NewModel(LabelStudioMLBase):
                     error_msg = f"Failed to process task {i+1}/{len(tasks)} (id: {task_id}): {error_str}"
                     print(error_msg)
                     logger.error(error_msg, exc_info=True)
-                    failed_tasks.append({
-                        'task_index': i,
-                        'task_id': task_id,
-                        'error': error_str
-                    })
+                    
+                    # 判断错误类型
+                    error_type = "processing_error"
+                    if any(keyword in error_str.lower() for keyword in ['timeout', '超时', 'timed out']):
+                        error_type = "timeout_error"
+                    elif any(keyword in error_str.lower() for keyword in ['region', '地区', 'location', 'country']):
+                        error_type = "region_not_supported"
+                    elif any(keyword in error_str.lower() for keyword in ['api', 'key', '密钥', 'auth']):
+                        error_type = "authentication_error"
+                    elif any(keyword in error_str.lower() for keyword in ['network', '网络', 'connection']):
+                        error_type = "network_error"
+                    
+                    # 将错误信息添加到响应中
+                    model_response.add_error(
+                        task_index=i,
+                        task_id=task_id,
+                        error_message=error_str,
+                        error_type=error_type
+                    )
+                    print(f"MODEL: Added error to response - type: {error_type}, task_id: {task_id}")
+                    
                 except Exception as log_error:
                     # 如果连异常处理都失败了，至少要记录基本信息
                     print(f"Critical error: Failed to log error for task {i+1}/{len(tasks)}: {log_error}")
                     try:
-                        failed_tasks.append({
-                            'task_index': i,
-                            'task_id': 'error_in_error_handling',
-                            'error': f'Logging failed: {log_error}'
-                        })
+                        model_response.add_error(
+                            task_index=i,
+                            task_id='error_in_error_handling',
+                            error_message=f'Logging failed: {log_error}',
+                            error_type="critical_error"
+                        )
                     except:
                         # 最后的保险措施
-                        print(f"Fatal error: Cannot even append to failed_tasks for task {i+1}")
+                        print(f"Fatal error: Cannot even add error info for task {i+1}")
                 # 继续处理下一个task，不中断整个批处理
                 continue
+        
+        # 设置预测结果
+        model_response.predictions = predictions
+        print(f"MODEL: Set predictions to response, count: {len(predictions)}")
         
         # 记录处理结果统计
         total_tasks = len(tasks)
         successful_tasks = len(predictions)
-        failed_count = len(failed_tasks)
+        error_count = len(model_response.errors) if model_response.has_errors() else 0
         
         print(f"\nBatch processing completed:")
         print(f"Total tasks: {total_tasks}")
         print(f"Successful: {successful_tasks}")
-        print(f"Failed: {failed_count}")
+        print(f"Failed: {error_count}")
         
-        if failed_tasks:
-            print(f"Failed task details:")
-            for failed_task in failed_tasks:
-                print(f"  - Task {failed_task['task_index']+1} (id: {failed_task['task_id']}): {failed_task['error']}")
+        if model_response.has_errors():
+            print(f"Error details:")
+            for error in model_response.errors:
+                print(f"  - Task {error['task_index']+1} (id: {error['task_id']}): [{error['error_type']}] {error['error_message']}")
         
-        # 即使有部分失败，也返回成功处理的结果
-        return ModelResponse(predictions=predictions)
+        # 返回包含预测结果和错误信息的响应
+        print(f"MODEL: Returning response - predictions: {len(model_response.predictions)}, errors: {len(model_response.errors) if model_response.has_errors() else 0}")
+        return model_response
     
     def fit(self, event, data, **kwargs):
         """

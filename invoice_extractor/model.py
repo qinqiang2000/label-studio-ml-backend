@@ -1,19 +1,17 @@
 import os
 import logging
 import re
-import pathlib
 from typing import List, Dict, Optional
 from uuid import uuid4
 from label_studio_ml.model import LabelStudioMLBase
 from label_studio_ml.response import ModelResponse
 from label_studio_sdk.label_interface.objects import PredictionValue
-from google.genai import types
-from google import genai
-from prompt import prompt, multi_page_prompt
-import PyPDF2
+from prompt import prompt
 import dotenv
-from utils import extract_json, get_mock_invoice_data, should_use_mock_data
+from utils import should_use_mock_data
 import json
+from invoice_extractor.processors.factory import DocumentProcessorFactory
+from invoice_extractor.processors.mock import MockProcessor
 
 # Load .env if present
 dotenv.load_dotenv()
@@ -30,36 +28,24 @@ if os.environ.get('USING_PROXY', '').upper() == 'TRUE':
     os.environ['ALL_PROXY'] = 'socks5://127.0.0.1:7891'
 
 
-client = genai.Client(api_key=os.environ.get("API_KEY"))
-# model = "gemini-2.5-flash-preview-05-20"
-model = "gemini-2.5-flash-preview-04-17"
-
-def is_multi_page_pdf(file_path):
-    """
-    判断一个文件是否为多页PDF。
-    :param file_path: PDF文件路径
-    :return: 如果是PDF且页数大于1，返回True，否则返回False
-    """
-    if not file_path.lower().endswith('.pdf'):
-        return False
-    try:
-        with open(file_path, 'rb') as f:
-            reader = PyPDF2.PdfReader(f)
-            return len(reader.pages) > 1
-    except Exception as e:
-        raise Exception(f"Error reading PDF: {file_path}, {e}")
-
-
 class NewModel(LabelStudioMLBase):
     MODEL_DIR = os.environ.get('MODEL_DIR', '.')
-    """Custom ML Backend model
-    """
+    """Custom ML Backend model with pluggable document processors"""
 
     def setup(self):
-        """Configure any parameters of your model here
-        """
-        self.set("model_version", "gemini-2.5-flash-preview-04-17")
-        self.prompt=None
+        """Configure any parameters of your model here"""
+        # Determine processor type from environment or default to gemini
+        processor_type = os.environ.get('DOCUMENT_PROCESSOR', 'mock' if should_use_mock_data() else 'gemini')
+        
+        # Create processor with optional configuration
+        processor_config = {}
+        if processor_type == 'gemini':
+            model_name = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash-preview-04-17')
+            processor_config['model_name'] = model_name
+        
+        self.processor = DocumentProcessorFactory.create_processor(processor_type, **processor_config)
+        self.set("model_version", self.processor.get_model_version())
+        self.prompt = None
 
     def extract_src_from_embed(self, embed_html):
         """Extract src attribute value from HTML embed tag"""
@@ -70,46 +56,20 @@ class NewModel(LabelStudioMLBase):
             return match.group(1)
         return None
 
-    def img_understanding(self, file_path):
-        # 检查是否使用仿真数据
-        if should_use_mock_data():
-            logger.info('Using mock data for img_understanding')
-            return get_mock_invoice_data()
-
-        contents = [
-            types.Part.from_bytes(
-                data=pathlib.Path(file_path).read_bytes(),
-                mime_type="application/pdf" if file_path.lower().endswith('.pdf') else (
-                    "image/png" if file_path.lower().endswith('.png') else
-                    "image/jpeg" if file_path.lower().endswith(('.jpg', '.jpeg')) else
-                    "application/octet-stream"
-                ),
-            )]
-
-        # instruction = multi_page_prompt if file_path.lower().endswith('.pdf') and is_multi_page_pdf(file_path) else prompt
-        instruction = self.prompt if self.prompt else prompt
+    def doc_understanding(self, file_path):
+        # 检查是否使用仿真数据 - 这个检查现在在processor内部处理
+        if should_use_mock_data() and not isinstance(self.processor, MockProcessor):
+            # 如果环境要求使用mock但当前不是mock processor，临时切换
+            logger.info('Environment requires mock data, switching to mock processor')
+            mock_processor = DocumentProcessorFactory.create_processor('mock')
+            json_string = mock_processor.process_document(file_path, "")
+        else:
+            # 使用配置的processor
+            instruction = self.prompt if self.prompt else prompt
+            json_string = self.processor.process_document(file_path, instruction)
         
-        generate_content_config = types.GenerateContentConfig(
-            response_mime_type="text/plain",
-            system_instruction=[
-                types.Part.from_text(text=instruction),
-            ],
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
-        )
-        
-        logger.info(f'calling genai: {model}')
-        response = client.models.generate_content(
-            model=model,
-            contents=contents,
-            config=generate_content_config,
-        )
-        
-        # extract_json returns a list of JSON strings, so we take the first element
-        json_string = extract_json(response.text)[0]
         text = self._post_process_ret(json_string, file_path)
-
         logger.info(f'response: {text}')
-    
         return text
                  
     def _post_process_ret(self, json_string: str, file_path: str) -> str:
@@ -169,7 +129,7 @@ class NewModel(LabelStudioMLBase):
         filepath = self.get_local_path(url, task_id=task['id'])
         print(f'Local path: {filepath}')
         
-        text = self.img_understanding(filepath)
+        text = self.doc_understanding(filepath)
         
         result = {
             "id": str(uuid4())[:8],
@@ -193,13 +153,6 @@ class NewModel(LabelStudioMLBase):
                 ModelResponse(predictions=predictions) with
                 predictions: [Predictions array in JSON format](https://labelstud.io/guide/export.html#Label-Studio-JSON-format-of-annotated-tasks)
         """
-        # print(f'''\
-        # Run prediction on {tasks}
-        # Received context: {context}
-        # Project ID: {self.project_id}
-        # Label config: {self.label_config}
-        # Parsed JSON Label config: {self.parsed_label_config}
-        # Extra params: {self.extra_params} \n\n''')
         self.prompt = kwargs.get('prompt') if kwargs else None
         print(f"Received prompt: {self.prompt}")
         

@@ -13,6 +13,7 @@ from prompt import prompt, multi_page_prompt
 import PyPDF2
 import dotenv
 from utils import extract_json, get_mock_invoice_data, should_use_mock_data
+import json
 
 # Load .env if present
 dotenv.load_dotenv()
@@ -103,11 +104,50 @@ class NewModel(LabelStudioMLBase):
             config=generate_content_config,
         )
         
-        text = extract_json(response.text)[0]   
+        # extract_json returns a list of JSON strings, so we take the first element
+        json_string = extract_json(response.text)[0]
+        text = self._post_process_ret(json_string, file_path)
+
         logger.info(f'response: {text}')
     
         return text
                  
+    def _post_process_ret(self, json_string: str, file_path: str) -> str:
+        """
+        Post-processes the extracted JSON text:
+        1. Parses the JSON string into a Python object.
+        2. Forces the 'page' field to [1] for image files.
+        3. Converts the Python object back to a JSON string.
+        """
+        try:
+            text = json.loads(json_string)
+            logger.info(f'Successfully parsed JSON response: {text}')
+        except json.JSONDecodeError as e:
+            logger.error(f'Failed to decode JSON from response: {json_string}, Error: {e}')
+            raise ValueError(f"Invalid JSON received from model: {json_string}") from e
+
+        # Force page field to [1] for image files
+        if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+            logger.info('Processing an image file, forcing "page" field to [1] for all objects.')
+            # Ensure text is a list before iterating
+            if isinstance(text, list):
+                for item in text:
+                    if isinstance(item, dict):
+                        item['page'] = [1]
+            else:
+                # This case should ideally not happen if the model consistently returns a list of objects
+                logger.warning(f"Expected parsed text to be a list but got {type(text)}. Cannot force 'page' field.")
+
+        # Convert the Python object back to a JSON string before returning
+        try:
+            text = json.dumps(text, ensure_ascii=False)
+            logger.info("Converted text back to JSON string.")
+        except TypeError as e:
+            logger.error(f"Failed to convert text object to JSON string: {text}, Error: {e}")
+            raise ValueError("Failed to serialize response to JSON") from e
+
+        return text
+
     def predict_single(self, task):
         # extract task metadata: labels, from_name, to_name and other
         from_name, to_name, value = self.label_interface.get_first_tag_occurence(

@@ -1,8 +1,15 @@
 import os
+import sys
 import logging
 import re
 from typing import List, Dict, Optional
 from uuid import uuid4
+
+# Add current directory to Python path to support direct imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
 from label_studio_ml.model import LabelStudioMLBase
 from label_studio_ml.response import ModelResponse
 from label_studio_sdk.label_interface.objects import PredictionValue
@@ -10,8 +17,8 @@ from prompt import prompt
 import dotenv
 from utils import should_use_mock_data
 import json
-from invoice_extractor.processors.factory import DocumentProcessorFactory
-from invoice_extractor.processors.mock import MockProcessor
+from processors.factory import DocumentProcessorFactory
+from processors.mock import MockProcessor
 
 # Load .env if present
 dotenv.load_dotenv()

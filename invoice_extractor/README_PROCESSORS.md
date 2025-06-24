@@ -1,15 +1,118 @@
-# Document Processor System
+# Document Processors
 
-This system provides a flexible, extensible architecture for processing documents using different AI models or processing strategies.
+This directory contains different document processors that can be used for document understanding tasks.
+
+## Available Processors
+
+### 1. GeminiProcessor
+
+Uses Google's Gemini API for document processing.
+
+#### Configuration
+
+The GeminiProcessor handles its own parameter configuration through environment variables:
+
+**Basic Configuration:**
+```bash
+API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash-preview-04-17
+```
+
+**Advanced LLM Parameters:**
+```bash
+# Temperature: Controls randomness (0.0-2.0, default: 0.1)
+GEMINI_TEMPERATURE=0.1
+
+# Maximum output tokens
+GEMINI_MAX_OUTPUT_TOKENS=8192
+
+# Top P: Nucleus sampling (0.0-1.0)
+GEMINI_TOP_P=0.95
+
+# Top K: Top-k sampling (integer)
+GEMINI_TOP_K=40
+
+# Random seed for reproducibility
+GEMINI_SEED=12345
+
+# Number of response candidates
+GEMINI_CANDIDATE_COUNT=1
+
+# Stop sequences (comma-separated)
+GEMINI_STOP_SEQUENCES="END,STOP"
+
+# Presence penalty (-2.0 to 2.0)
+GEMINI_PRESENCE_PENALTY=0.0
+
+# Frequency penalty (-2.0 to 2.0)
+GEMINI_FREQUENCY_PENALTY=0.0
+
+# Response MIME type
+GEMINI_RESPONSE_MIME_TYPE=text/plain
+
+# Thinking budget (0 means no thinking)
+GEMINI_THINKING_BUDGET=0
+```
+
+#### Usage Examples
+
+**Environment Variables:**
+```python
+# Parameters are automatically loaded from environment variables
+processor = GeminiProcessor()
+```
+
+**Custom Configuration:**
+```python
+# Custom parameters override environment variables
+custom_config = {
+    "temperature": 0.2,
+    "max_output_tokens": 4096,
+    "top_p": 0.9
+}
+processor = GeminiProcessor(llm_param_config=custom_config)
+```
+
+### 2. MockProcessor
+
+Uses mock data for testing purposes.
+
+#### Configuration
+No special configuration needed. Uses predefined mock responses.
 
 ## Architecture
 
-The system uses the **Strategy Pattern** and **Factory Pattern** to allow easy switching between different document processing implementations:
+Each processor is responsible for:
+1. **Parameter Management**: Reading from environment variables and handling custom configurations
+2. **API Integration**: Managing the specific API client and authentication
+3. **Response Processing**: Converting API responses to the expected format
+4. **Error Handling**: Managing processor-specific errors and edge cases
 
-- `DocumentProcessor` (Abstract Base Class): Defines the interface for all processors
-- `GeminiProcessor`: Implementation using Google's Gemini AI model
-- `MockProcessor`: Mock implementation for testing
-- `DocumentProcessorFactory`: Factory for creating processor instances
+## Adding New Processors
+
+To add a new processor:
+
+1. Create a new file in `processors/` directory
+2. Inherit from `DocumentProcessor` base class
+3. Implement required methods: `process_document()` and `get_model_version()`
+4. Handle your processor's specific parameters in the `__init__` method
+5. Register the processor in `factory.py`
+
+Example:
+```python
+class MyProcessor(DocumentProcessor):
+    def __init__(self, **kwargs):
+        # Handle your processor's specific parameters here
+        self.param1 = os.environ.get('MY_PARAM1', 'default')
+        self.param2 = kwargs.get('custom_param', 'default')
+    
+    def process_document(self, file_path: str, instruction: str) -> str:
+        # Your processing logic here
+        pass
+    
+    def get_model_version(self) -> str:
+        return "my-processor-v1.0"
+```
 
 ## Configuration
 
@@ -86,48 +189,6 @@ DocumentProcessorFactory.register_processor('custom', CustomProcessor)
 
 ```bash
 export DOCUMENT_PROCESSOR=custom
-```
-
-## Available Processors
-
-### GeminiProcessor
-- **Type**: `gemini`
-- **Description**: Uses Google's Gemini AI model for document processing
-- **Configuration**: 
-  - `GEMINI_MODEL`: Model name (optional)
-  - `API_KEY`: Google AI API key (required)
-
-### MockProcessor
-- **Type**: `mock`
-- **Description**: Returns predefined mock data for testing
-- **Configuration**: None required
-
-## Usage Examples
-
-### Basic Usage
-```python
-from invoice_extractor.model import DocumentProcessorFactory
-
-# Create a processor
-processor = DocumentProcessorFactory.create_processor('gemini')
-
-# Process a document
-result = processor.process_document('/path/to/document.pdf', 'Extract invoice data')
-```
-
-### With Configuration
-```python
-# Create Gemini processor with specific model
-processor = DocumentProcessorFactory.create_processor(
-    'gemini', 
-    model_name='gemini-2.5-flash-preview-05-20'
-)
-```
-
-### List Available Processors
-```python
-available = DocumentProcessorFactory.get_available_processors()
-print(f"Available processors: {available}")
 ```
 
 ## Benefits

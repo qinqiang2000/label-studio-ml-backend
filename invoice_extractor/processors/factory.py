@@ -1,7 +1,7 @@
 from typing import List
-from invoice_extractor.processors.base import DocumentProcessor
-from invoice_extractor.processors.gemini import GeminiProcessor
-from invoice_extractor.processors.mock import MockProcessor
+from processors.base import DocumentProcessor
+from processors.gemini import GeminiProcessor
+from processors.mock import MockProcessor
 
 class DocumentProcessorFactory:
     """Factory for creating document processors"""

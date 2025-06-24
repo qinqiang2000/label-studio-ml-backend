@@ -1,6 +1,6 @@
 import logging
-from invoice_extractor.processors.base import DocumentProcessor
-from invoice_extractor.utils import get_mock_invoice_data
+from processors.base import DocumentProcessor
+from utils import get_mock_invoice_data
 
 logger = logging.getLogger(__name__)
 

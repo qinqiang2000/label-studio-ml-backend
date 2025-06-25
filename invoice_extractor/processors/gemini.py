@@ -1,3 +1,4 @@
+import json
 import os
 import logging
 import pathlib
@@ -130,7 +131,58 @@ class GeminiProcessor(DocumentProcessor):
         logger.debug(f"Built Gemini param config: {final_config}")
         return final_config
     
-    def process_document(self, file_path: str, instruction: str) -> str:
+    def _normalize_schema(self, schema):
+        """
+        标准化 JSON Schema 格式
+        将大写的类型名称转换为小写，修复结构问题
+        """
+        if not isinstance(schema, dict):
+            return schema
+        
+        # 递归处理嵌套的 schema
+        normalized = {}
+        
+        for key, value in schema.items():
+            if key == 'type' and isinstance(value, str):
+                # 将类型名称转换为小写
+                normalized[key] = value.lower()
+            elif key == 'properties' and isinstance(value, dict):
+                # 递归处理 properties，并移除错误的 required 字段
+                normalized_props = {}
+                for prop_key, prop_value in value.items():
+                    if prop_key != 'required':  # 移除 properties 中的 required
+                        normalized_props[prop_key] = self._normalize_schema(prop_value)
+                normalized[key] = normalized_props
+            elif key in ['items', 'anyOf', 'oneOf', 'allOf'] and isinstance(value, (dict, list)):
+                # 递归处理数组和条件 schema
+                if isinstance(value, dict):
+                    normalized[key] = self._normalize_schema(value)
+                elif isinstance(value, list):
+                    normalized[key] = [self._normalize_schema(item) for item in value]
+            else:
+                # 其他字段保持不变
+                normalized[key] = value
+        
+        # 添加调试日志，输出标准化的schema
+        logger.info(f"Normalized schema:\n {json.dumps(normalized, indent=2, ensure_ascii=False)}\n")
+        return normalized
+    
+    def process_document(self, file_path: str, instruction: str, runtime_config: Optional[dict] = None) -> str:
+        """
+        处理文档
+        
+        Args:
+            file_path: 文档文件路径
+            instruction: 处理指令
+            runtime_config: 运行时配置，可覆盖默认配置。支持的参数：
+                - temperature: 温度参数
+                - response_mime_type: 响应MIME类型
+                - response_schema: 响应schema
+                - 以及其他GeminiLMModelParams支持的参数
+        
+        Returns:
+            处理结果的JSON字符串
+        """
         contents = [
             types.Part.from_bytes(
                 data=pathlib.Path(file_path).read_bytes(),
@@ -141,8 +193,19 @@ class GeminiProcessor(DocumentProcessor):
                 ),
             )]
         
+        # 合并运行时配置：runtime_config > 默认配置
+        merged_config = {**self.llm_param_config}
+        if runtime_config:
+            merged_config.update(runtime_config)
+            logger.debug(f"Applied runtime config: {runtime_config}")
+        
+        # 标准化 response_schema 格式（修复大写类型名称问题）
+        if 'response_schema' in merged_config and merged_config['response_schema']:
+            merged_config['response_schema'] = self._normalize_schema(merged_config['response_schema'])
+            logger.info(f"Normalized response_schema format")
+        
         # 构造完整的参数配置
-        param_config = GeminiLMModelParams(**self.llm_param_config).model_dump(exclude_none=True)
+        param_config = GeminiLMModelParams(**merged_config).model_dump(exclude_none=True)
         param_config["system_instruction"] = [types.Part.from_text(text=instruction)]
         
         generate_content_config = types.GenerateContentConfig(**param_config)
@@ -155,11 +218,55 @@ class GeminiProcessor(DocumentProcessor):
             contents=contents,
             config=generate_content_config,
         )
+        print(response.text)
         
         # extract_json returns a list of JSON strings, so we take the first element
-        print(response.text)
-        # json_string = extract_json(response.text)[0]
-        return response.text
+        json_string = response.text
+        
+        # if the response_mime_type is text/plain, we need to extract the JSON string
+        current_mime_type = merged_config.get('response_mime_type', 'application/json')
+        if current_mime_type == 'text/plain':
+            json_string = extract_json(response.text)
+            if isinstance(json_string, list) and len(json_string) > 0:
+                json_string = json_string[0]
+                
+        return json_string
     
     def get_model_version(self) -> str:
         return self.model_name 
+
+"""
+使用示例：
+
+# 1. 使用默认配置（向后兼容）
+processor = GeminiProcessor()
+result = processor.process_document("invoice.pdf", "Extract invoice data")
+
+# 2. 使用运行时配置
+processor = GeminiProcessor()
+
+# 传递特定的配置参数
+runtime_config = {
+    "temperature": 0.2,
+    "response_mime_type": "application/json",
+    "response_schema": {
+        "type": "object",
+        "properties": {
+            "invoice_number": {"type": "string"},
+            "total_amount": {"type": "number"},
+            "date": {"type": "string"}
+        },
+        "required": ["invoice_number", "total_amount", "date"]
+    }
+}
+
+result = processor.process_document("invoice.pdf", "Extract invoice data", runtime_config)
+
+# 3. 只覆盖部分参数
+minimal_config = {
+    "temperature": 0.5,
+    "response_mime_type": "text/plain"
+}
+
+result = processor.process_document("invoice.pdf", "Extract invoice data", minimal_config)
+""" 

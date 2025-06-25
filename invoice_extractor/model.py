@@ -63,7 +63,7 @@ class NewModel(LabelStudioMLBase):
             return match.group(1)
         return None
 
-    def doc_understanding(self, file_path):
+    def doc_understanding(self, file_path, runtime_config: Optional[dict] = None):
         # 检查是否使用仿真数据 - 这个检查现在在processor内部处理
         if should_use_mock_data() and not isinstance(self.processor, MockProcessor):
             # 如果环境要求使用mock但当前不是mock processor，临时切换
@@ -73,10 +73,21 @@ class NewModel(LabelStudioMLBase):
         else:
             # 使用配置的processor
             instruction = self.prompt if self.prompt else prompt
-            json_string = self.processor.process_document(file_path, instruction)
+            # 传递runtime_config给processor
+            if hasattr(self.processor, 'process_document'):
+                # 检查processor是否支持runtime_config参数
+                import inspect
+                sig = inspect.signature(self.processor.process_document)
+                if 'runtime_config' in sig.parameters:
+                    json_string = self.processor.process_document(file_path, instruction, runtime_config)
+                else:
+                    json_string = self.processor.process_document(file_path, instruction)
+                    if runtime_config:
+                        logger.warning(f'Processor {type(self.processor).__name__} does not support runtime_config, ignoring: {runtime_config}')
+            else:
+                json_string = self.processor.process_document(file_path, instruction)
         
         text = self._post_process_ret(json_string, file_path)
-        logger.info(f'response: {text}')
         return text
                  
     def _post_process_ret(self, json_string: str, file_path: str) -> str:
@@ -88,7 +99,6 @@ class NewModel(LabelStudioMLBase):
         """
         try:
             text = json.loads(json_string)
-            logger.info(f'Successfully parsed JSON response: {text}')
         except json.JSONDecodeError as e:
             logger.error(f'Failed to decode JSON from response: {json_string}, Error: {e}')
             raise ValueError(f"Invalid JSON received from model: {json_string}") from e
@@ -115,7 +125,7 @@ class NewModel(LabelStudioMLBase):
 
         return text
 
-    def predict_single(self, task):
+    def predict_single(self, task, runtime_config: Optional[dict] = None):
         # extract task metadata: labels, from_name, to_name and other
         from_name, to_name, value = self.label_interface.get_first_tag_occurence(
             'TextArea',
@@ -136,7 +146,7 @@ class NewModel(LabelStudioMLBase):
         filepath = self.get_local_path(url, task_id=task['id'])
         print(f'Local path: {filepath}')
         
-        text = self.doc_understanding(filepath)
+        text = self.doc_understanding(filepath, runtime_config)
         
         result = {
             "id": str(uuid4())[:8],
@@ -156,12 +166,37 @@ class NewModel(LabelStudioMLBase):
         """ Write your inference logic here
             :param tasks: [Label Studio tasks in JSON format](https://labelstud.io/guide/task_format.html)
             :param context: [Label Studio context in JSON format](https://labelstud.io/guide/ml_create#Implement-prediction-logic)
+            :param kwargs: Additional parameters including:
+                - prompt: Custom prompt for processing
+                - runtime_config: Runtime configuration for AI model (temperature, response_schema, response_mime_type, etc.)
             :return model_response
                 ModelResponse(predictions=predictions) with
                 predictions: [Predictions array in JSON format](https://labelstud.io/guide/export.html#Label-Studio-JSON-format-of-annotated-tasks)
         """
+        # 从kwargs中提取参数
         self.prompt = kwargs.get('prompt') if kwargs else None
+        runtime_config = kwargs.get('runtime_config') if kwargs else None
+        
         print(f"Received prompt: {self.prompt}")
+        print(f"Received runtime_config: {runtime_config}")
+        
+        # 验证runtime_config格式
+        if runtime_config is not None:
+            if not isinstance(runtime_config, dict):
+                logger.warning(f"runtime_config should be a dict, got {type(runtime_config)}, ignoring")
+                runtime_config = None
+            else:
+                # 记录收到的配置参数
+                supported_params = ['temperature', 'response_schema', 'response_mime_type', 'max_output_tokens', 
+                                  'top_p', 'top_k', 'seed', 'candidate_count', 'stop_sequences', 
+                                  'presence_penalty', 'frequency_penalty', 'response_modalities', 'thinking_config']
+                received_params = list(runtime_config.keys())
+                logger.info(f"Received runtime_config parameters: {received_params}")
+                
+                # 警告未知参数
+                unknown_params = [p for p in received_params if p not in supported_params]
+                if unknown_params:
+                    logger.warning(f"Unknown runtime_config parameters (will be ignored): {unknown_params}")
         
         predictions = []
         
@@ -172,7 +207,7 @@ class NewModel(LabelStudioMLBase):
         for i, task in enumerate(tasks):
             try:
                 print(f"Processing task {i+1}/{len(tasks)}, task_id: {task.get('id', 'unknown')}")
-                prediction = self.predict_single(task)
+                prediction = self.predict_single(task, runtime_config)
                 if prediction:
                     predictions.append(prediction)
                     print(f"Successfully processed task {i+1}/{len(tasks)}")
@@ -203,6 +238,8 @@ class NewModel(LabelStudioMLBase):
                         error_type = "authentication_error"
                     elif any(keyword in error_str.lower() for keyword in ['network', '网络', 'connection']):
                         error_type = "network_error"
+                    elif any(keyword in error_str.lower() for keyword in ['runtime_config', 'config', 'parameter']):
+                        error_type = "config_error"
                     
                     # 将错误信息添加到响应中
                     model_response.add_error(
@@ -242,6 +279,7 @@ class NewModel(LabelStudioMLBase):
         print(f"Total tasks: {total_tasks}")
         print(f"Successful: {successful_tasks}")
         print(f"Failed: {error_count}")
+
         
         if model_response.has_errors():
             print(f"Error details:")

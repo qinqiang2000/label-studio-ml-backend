@@ -68,11 +68,11 @@ class GeminiLMModelParams(BaseModel):
 class GeminiProcessor(DocumentProcessor):
     """Gemini-based document processor"""
     
-    def __init__(self, model_name: str = "gemini-2.5-flash-preview-04-17", llm_param_config: dict = None):
+    def __init__(self, model_name: str = "gemini-2.5-flash-preview-04-17"):
         self.client = genai.Client(api_key=os.environ.get("API_KEY"))
         self.model_name = model_name
-        # 从环境变量或传入参数中构建 LLM 配置
-        self.llm_param_config = self._build_param_config(llm_param_config or {})
+        # 从环境变量构建 LLM 配置，使用默认值
+        self.llm_param_config = self._build_param_config({})
     
     def _build_param_config(self, custom_config: dict) -> dict:
         """从环境变量和自定义配置构建 LLM 参数配置"""

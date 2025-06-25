@@ -43,7 +43,7 @@ class GeminiLMModelParams(BaseModel):
         description="频率惩罚：正值会基于新 token 在文本中已出现的频率对其进行惩罚，降低模型重复相同词汇的可能性。"
     )
     response_mime_type: Optional[str] = Field(
-        "text/plain",
+        "application/json",
         description="""响应输出的 MIME 类型。支持的 MIME 类型：
         - text/plain：（默认）文本输出。
         - application/json： JSON 响应。
@@ -157,8 +157,9 @@ class GeminiProcessor(DocumentProcessor):
         )
         
         # extract_json returns a list of JSON strings, so we take the first element
-        json_string = extract_json(response.text)[0]
-        return json_string
+        print(response.text)
+        # json_string = extract_json(response.text)[0]
+        return response.text
     
     def get_model_version(self) -> str:
         return self.model_name 

@@ -163,8 +163,6 @@ class GeminiProcessor(DocumentProcessor):
                 # 其他字段保持不变
                 normalized[key] = value
         
-        # 添加调试日志，输出标准化的schema
-        logger.info(f"Normalized schema:\n {json.dumps(normalized, indent=2, ensure_ascii=False)}\n")
         return normalized
     
     def process_document(self, file_path: str, instruction: str, runtime_config: Optional[dict] = None) -> str:

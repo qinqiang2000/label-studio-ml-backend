@@ -88,7 +88,7 @@ class NewModel(LabelStudioMLBase):
                 json_string = self.processor.process_document(file_path, instruction)
         
         text = self._post_process_ret(json_string, file_path)
-        return text
+        return text 
                  
     def _post_process_ret(self, json_string: str, file_path: str) -> str:
         """

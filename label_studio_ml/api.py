@@ -165,6 +165,84 @@ def health():
     })
 
 
+@_server.route('/analyze', methods=['POST'])
+@exception_handler
+def _analyze():
+    """
+    Analyze Excel content
+
+    Example request:
+    request = {
+        'excel_content': '<base64_encoded_excel_content>',
+        'excel_filename': '<filename.xlsx>',
+        'project': '<project.id>.<timestamp>',
+        'label_config': '<xml_config>',
+        'params': {
+            'context': {},
+            'analysis_type': 'evaluation',
+            'extra_params': {}
+        }
+    }
+
+    @return:
+    Analysis result in markdown format
+    """
+    data = request.json
+    excel_content = data.get('excel_content')
+    excel_filename = data.get('excel_filename')
+    project = str(data.get('project'))
+    project_id = project.split('.', 1)[0] if project else None
+    label_config = data.get('label_config')
+    params = data.get('params', {})
+    context = params.get('context', {})
+    analysis_type = params.get('analysis_type', 'evaluation')
+    extra_params = params.get('extra_params', {})
+
+    try:
+        # Validate required fields
+        if not excel_content:
+            return jsonify({
+                'status': 'error',
+                'error': 'excel_content is required'
+            }), 400
+        
+        if not excel_filename:
+            return jsonify({
+                'status': 'error',
+                'error': 'excel_filename is required'
+            }), 400
+
+        model = MODEL_CLASS(project_id=project_id, label_config=label_config)
+
+        logger.info(f"API: Starting analysis for excel file: {excel_filename}")
+
+        # Call the analyze method
+        analysis_result = model.analyze_excel(
+            excel_content=excel_content,
+            filename=excel_filename,
+            context=context,
+            analysis_type=analysis_type,
+            **extra_params
+        )
+
+        logger.info(f"API: Received analysis result from model")
+
+        return jsonify({
+            'status': 'success',
+            'analysis_result': analysis_result,
+            'metadata': {
+                'model_version': str(model.model_version)
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"API: Error in analyze endpoint: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 @_server.route('/metrics', methods=['GET'])
 @exception_handler
 def metrics():

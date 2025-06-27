@@ -196,8 +196,9 @@ def _analyze():
     params = data.get('params', {})
     context = params.get('context', {})
     analysis_type = params.get('analysis_type', 'evaluation')
+    prompt = params.get('prompt', None)
     extra_params = params.get('extra_params', {})
-
+    
     try:
         # Validate required fields
         if not excel_content:
@@ -222,6 +223,7 @@ def _analyze():
             filename=excel_filename,
             context=context,
             analysis_type=analysis_type,
+            prompt=prompt,
             **extra_params
         )
 

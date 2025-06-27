@@ -69,7 +69,7 @@ class NewModel(LabelStudioMLBase):
         self.prompt = None
 
     def analyze_excel(self, excel_content: str, filename: str, context: Optional[Dict] = None, 
-                     analysis_type: str = 'evaluation', **kwargs) -> str:
+                     analysis_type: str = 'evaluation', prompt=None, **kwargs) -> str:
         """
         Analyze Excel file content using Gemini document understanding and return analysis in markdown format
         
@@ -78,13 +78,25 @@ class NewModel(LabelStudioMLBase):
             filename: Excel filename for reference
             context: Optional context information
             analysis_type: Type of analysis to perform (default: 'evaluation')
-            **kwargs: Additional parameters
+            **kwargs: Additional parameters including:
+                - prompt: Custom prompt for analysis
         
         Returns:
             Markdown formatted analysis result from Gemini
         """
+        logger.info("=== 接收到的prompt===")
+        logger.info(prompt)
+        logger.info("=== 请求数据打印完成 ===")
+
+        custom_prompt = prompt
+        if custom_prompt:
+            logger.info(f"Using custom prompt from kwargs: {custom_prompt[:100]}...")
+            base_prompt = custom_prompt
+        else:
+            logger.info("Using default analysis_prompt")
+            base_prompt = analysis_prompt
+        
         logger.info(f"Starting Excel analysis with Gemini for file: {filename}")
-        logger.info(f"Analysis type: {analysis_type}")
         
         # Check Gemini availability
         if not GEMINI_AVAILABLE:
@@ -148,18 +160,14 @@ class NewModel(LabelStudioMLBase):
             
             # Prepare analysis prompt
             full_prompt = f"""
-{analysis_prompt}
+                    {base_prompt}
 
-**待分析文件信息:**
-- 文件名: {filename}
-- 分析类型: {analysis_type}
-- 已处理工作表数量: {len(excel_data)} (仅前2个工作表)
-- 工作表名称: {list(excel_data.keys())}
-- CSV文件数量: {len(csv_files)}
-{context_info}
-
-请基于上传的前2个工作表的CSV文件数据，按照系统角色要求进行深度分析并生成结构化报告。
-"""
+                    **待分析文件信息:**
+                    - 已处理工作表数量: {len(excel_data)} (仅前2个工作表)
+                    - 工作表名称: {list(excel_data.keys())}
+                    - CSV文件数量: {len(csv_files)}
+                    {context_info}
+                    """
             
             contents.append(full_prompt)
             

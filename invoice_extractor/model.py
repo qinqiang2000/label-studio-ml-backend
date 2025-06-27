@@ -85,7 +85,7 @@ class NewModel(LabelStudioMLBase):
             Markdown formatted analysis result from Gemini
         """
         logger.info("=== 接收到的prompt===")
-        logger.info(prompt)
+        logger.info(prompt[:200] if prompt else "")
         logger.info("=== 请求数据打印完成 ===")
 
         custom_prompt = prompt
@@ -188,7 +188,7 @@ class NewModel(LabelStudioMLBase):
                 logger.info("=== GEMINI返回的完整分析结果 ===")
                 logger.info(f"返回内容长度: {len(analysis_result)} 字符")
                 logger.info("=== 返回内容开始 ===")
-                logger.info(analysis_result)
+                logger.info(analysis_result[:200] + "..." if len(analysis_result) > 200 else analysis_result)
                 logger.info("=== 返回内容结束 ===")
                 
                 return analysis_result

@@ -27,11 +27,11 @@ processors:
     models:
       gemini-2.5-flash-preview-04-17:
         name: "gemini-2.5-flash-preview-04-17"
-        description: "Gemini 2.5 Flash Preview (tested, recommended)"
+        description: "Gemini 2.5 Flash (tested, recommended)"
         
       gemini-2.5-flash-lite-preview-06-17:
         name: "gemini-2.5-flash-lite-preview-06-17"
-        description: "Gemini 2.5 flash (fastest and cheapest)"
+        description: "Gemini 2.5 flash lite (fastest and cheapest)"
 
   # OpenAI 处理器  
   openai:

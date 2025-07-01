@@ -231,7 +231,7 @@ class GeminiProcessor(DocumentProcessor):
         return json_string
     
     def get_model_version(self) -> str:
-        return self.model_name 
+        return f"gemini|{self.model_name}"
 
 """
 使用示例：

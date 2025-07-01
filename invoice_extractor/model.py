@@ -25,6 +25,9 @@ import json
 from processors.factory import DocumentProcessorFactory
 from processors.mock import MockProcessor
 
+logger = logging.getLogger(__name__)
+
+
 # Gemini imports
 try:
     from google import genai
@@ -36,8 +39,6 @@ except ImportError:
 
 # Load .env if present
 dotenv.load_dotenv()
-
-logger = logging.getLogger(__name__)
 
 LABEL_STUDIO_ACCESS_TOKEN = os.environ.get("LABEL_STUDIO_ACCESS_TOKEN")
 LABEL_STUDIO_HOST = os.environ.get("LABEL_STUDIO_URL")
@@ -55,15 +56,50 @@ class NewModel(LabelStudioMLBase):
 
     def setup(self):
         """Configure any parameters of your model here"""
-        # Determine processor type from environment or default to gemini
-        processor_type = os.environ.get('DOCUMENT_PROCESSOR', 'mock' if should_use_mock_data() else 'gemini')
         
-        # Create processor with optional configuration
-        processor_config = {}
-        if processor_type == 'gemini':
-            model_name = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash-preview-04-17')
-            processor_config['model_name'] = model_name
+        # 尝试使用配置管理器获取默认配置
+        try:
+            from config.manager import config_manager
+            
+            # 确定处理器类型
+            if should_use_mock_data():
+                processor_type = 'mock'
+            else:
+                # 优先使用环境变量，否则使用配置文件中的默认值
+                processor_type = os.environ.get('DOCUMENT_PROCESSOR')
+                if not processor_type:
+                    processor_type = config_manager._config.get('defaults', {}).get('processor', 'gemini')
+            
+            logger.info(f"Using processor type: {processor_type}")
+            
+            # 获取处理器配置
+            processor_config = {}
+            if processor_type in ['gemini', 'openai']:
+                # 从配置管理器获取默认模型
+                default_model = config_manager.get_default_model(processor_type)
+                if default_model:
+                    processor_config['model_name'] = default_model
+                    logger.info(f"Using model from config: {default_model}")
+            
+        except ImportError:
+            logger.warning("Config manager not available, using fallback setup")
+            # 备用配置方法
+            processor_type = os.environ.get('DOCUMENT_PROCESSOR', 'mock' if should_use_mock_data() else 'gemini')
+            processor_config = {}
+            if processor_type == 'gemini':
+                model_name = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash-preview-04-17')
+                processor_config['model_name'] = model_name
+                
+        except Exception as e:
+            logger.error(f"Failed to use config manager in setup: {e}")
+            # 备用配置方法
+            processor_type = os.environ.get('DOCUMENT_PROCESSOR', 'mock' if should_use_mock_data() else 'gemini')
+            processor_config = {}
+            if processor_type == 'gemini':
+                model_name = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash-preview-04-17')
+                processor_config['model_name'] = model_name
         
+        # 创建处理器实例
         self.processor = DocumentProcessorFactory.create_processor(processor_type, **processor_config)
         self.set("model_version", self.processor.get_model_version())
         self.prompt = None
@@ -72,6 +108,9 @@ class NewModel(LabelStudioMLBase):
                      analysis_type: str = 'evaluation', prompt=None, **kwargs) -> str:
         """
         Analyze Excel file content using Gemini document understanding and return analysis in markdown format
+        
+        注意: 此方法有独立的处理逻辑，不使用配置管理器的模型选择，
+        而是直接使用环境变量 API_KEY 和 ANALYSIS_MODEL 来配置 Gemini。
         
         Args:
             excel_content: Base64 encoded Excel file content
@@ -432,6 +471,7 @@ class NewModel(LabelStudioMLBase):
             :param kwargs: Additional parameters including:
                 - prompt: Custom prompt for processing
                 - runtime_config: Runtime configuration for AI model (temperature, response_schema, response_mime_type, etc.)
+                - model_version: Model version to use for prediction (format: "processor_type|model_name" or just model_name)
             :return model_response
                 ModelResponse(predictions=predictions) with
                 predictions: [Predictions array in JSON format](https://labelstud.io/guide/export.html#Label-Studio-JSON-format-of-annotated-tasks)
@@ -439,9 +479,40 @@ class NewModel(LabelStudioMLBase):
         # 从kwargs中提取参数
         self.prompt = kwargs.get('prompt') if kwargs else None
         runtime_config = kwargs.get('runtime_config') if kwargs else None
+        model_version = kwargs.get('model_version') if kwargs else None
         
         print(f"Received prompt: {self.prompt}")
         print(f"Received runtime_config: {runtime_config}")
+        print(f"Received model_version: {model_version}")
+        
+        # 如果指定了model_version，切换处理器
+        original_processor = None
+        original_model_version = self.model_version
+        
+        if model_version and model_version.strip() != "":
+            try:
+                original_processor = self.processor
+                processor_type, model_name = self._parse_model_version(model_version)
+                
+                if processor_type and model_name:
+                    # 创建新的处理器实例
+                    processor_config = {}
+                    # 为所有处理器类型设置 model_name 参数
+                    processor_config['model_name'] = model_name
+                    
+                    self.processor = DocumentProcessorFactory.create_processor(processor_type, **processor_config)
+                    self.set("model_version", self.processor.get_model_version())
+                    logger.info(f"Switched to processor: {processor_type} with model: {model_name}")
+                    print(f"MODEL: Switched to {processor_type}|{model_name}")
+                else:
+                    logger.warning(f"Failed to parse model_version '{model_version}', using default processor")
+                    
+            except Exception as e:
+                logger.error(f"Failed to switch processor for model_version '{model_version}': {e}, using default")
+                print(f"MODEL: Error switching processor: {e}")
+                # 如果切换失败，恢复原始处理器
+                if original_processor:
+                    self.processor = original_processor
         
         # 验证runtime_config格式
         if runtime_config is not None:
@@ -549,9 +620,197 @@ class NewModel(LabelStudioMLBase):
             for error in model_response.errors:
                 print(f"  - Task {error['task_index']+1} (id: {error['task_id']}): [{error['error_type']}] {error['error_message']}")
         
+        # 恢复原始处理器（如果进行了切换）
+        if original_processor:
+            try:
+                self.processor = original_processor
+                self.set("model_version", original_model_version)
+                logger.info("Restored original processor after prediction")
+                print("MODEL: Restored original processor")
+            except Exception as e:
+                logger.error(f"Failed to restore original processor: {e}")
+        
         # 返回包含预测结果和错误信息的响应
         print(f"MODEL: Returning response - predictions: {len(model_response.predictions)}, errors: {len(model_response.errors) if model_response.has_errors() else 0}")
         return model_response
+    
+    def _parse_model_version(self, model_version: str) -> tuple:
+        """
+        解析model_version字符串，返回(processor_type, model_name)
+        
+        Args:
+            model_version: 模型版本字符串，格式可以是：
+                - "processor_type|model_name" (如: "gemini|gemini-2.5-flash")
+                - "model_name" (如: "gemini-2.5-flash"，默认为gemini处理器)
+        
+        Returns:
+            tuple: (processor_type, model_name) 或 (None, None) 如果解析失败
+        """
+        try:
+            # 首先尝试使用配置管理器验证
+            try:
+                from config.manager import config_manager
+                result = config_manager.validate_model_version(model_version)
+                if result != (None, None):
+                    return result
+                # 如果配置管理器返回 None，继续使用备用方法
+                
+            except ImportError:
+                logger.warning("Config manager not available, using fallback parsing")
+                
+            except Exception as e:
+                logger.error(f"Failed to validate model version with config manager: {e}")
+            
+            # 备用解析方法
+            model_version = model_version.strip()
+            if '|' in model_version:
+                parts = model_version.split('|', 1)
+                processor_type = parts[0].strip()
+                model_name = parts[1].strip()
+                
+                # 验证处理器类型是否可用
+                available_processors = DocumentProcessorFactory.get_available_processors()
+                if processor_type not in available_processors:
+                    logger.error(f"Unknown processor type: {processor_type}. Available: {available_processors}")
+                    return None, None
+                
+                return processor_type, model_name
+            else:
+                # 如果没有分隔符，默认假设是gemini模型名称
+                model_name = model_version
+                if model_name:
+                    return 'gemini', model_name
+                else:
+                    return None, None
+                    
+        except Exception as e:
+            logger.error(f"Failed to parse model_version '{model_version}': {e}")
+            return None, None
+    
+    def get_versions(self):
+        """
+        获取可用的处理器和模型版本
+        
+        Returns:
+            dict: 包含可用版本信息的字典
+        """
+        try:
+            # 尝试使用配置管理器获取版本信息
+            try:
+                from config.manager import config_manager
+                available_versions = config_manager.get_all_versions()
+                logger.info(f"Retrieved {len(available_versions)} versions from config manager")
+                
+            except ImportError:
+                logger.warning("Config manager not available, using fallback method")
+                available_versions = self._get_fallback_versions()
+                
+            except Exception as e:
+                logger.error(f"Failed to get versions from config manager: {e}")
+                available_versions = self._get_fallback_versions()
+            
+            # 获取当前使用的版本信息
+            current_processor_type = None
+            current_model_name = None
+            
+            # 尝试从当前处理器获取信息
+            if hasattr(self.processor, '__class__'):
+                processor_class_name = self.processor.__class__.__name__.lower()
+                if 'gemini' in processor_class_name:
+                    current_processor_type = 'gemini'
+                elif 'openai' in processor_class_name:
+                    current_processor_type = 'openai'
+                elif 'mock' in processor_class_name:
+                    current_processor_type = 'mock'
+            
+            if hasattr(self.processor, 'get_model_version'):
+                current_model_name = self.processor.get_model_version()
+            
+            result = {
+                "versions": available_versions,
+                "current_version": {
+                    "processor_type": current_processor_type,
+                    "model_name": current_model_name,
+                    "version_string": f"{current_processor_type}|{current_model_name}" if current_processor_type and current_model_name else str(self.model_version)
+                },
+                "total_count": len(available_versions)
+            }
+            
+            logger.info(f"Retrieved {len(available_versions)} available model versions")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to get versions: {e}")
+            return {
+                "versions": [],
+                "current_version": {"model_name": str(self.model_version)},
+                "total_count": 0,
+                "error": str(e)
+            }
+    
+    def _get_fallback_versions(self):
+        """
+        当配置管理器不可用时的备用版本获取方法
+        
+        Returns:
+            List of version dictionaries
+        """
+        available_versions = []
+        
+        # Gemini处理器的可用模型
+        gemini_models = [
+            {
+                "model_name": "gemini-2.5-flash-preview-04-17", 
+                "description": "Gemini 2.5 Flash Preview (tested)"
+            },
+            {
+                "model_name": "gemini-2.5-flash-lite-preview-06-17",
+                "description": "Gemini 2.5 flash (fastest and cheapest)"
+            }
+        ]
+        
+        for model_info in gemini_models:
+            available_versions.append({
+                "processor_type": "gemini",
+                "model_name": model_info["model_name"],
+                "version_string": f"gemini|{model_info['model_name']}",
+                "description": model_info["description"],
+                "is_default": model_info["model_name"] == "gemini-2.5-flash-preview-04-17"
+            })
+        
+        # OpenAI处理器的可用模型（如果可用）
+        from processors.factory import OPENAI_AVAILABLE
+        if OPENAI_AVAILABLE:
+            openai_models = [
+                {
+                    "model_name": "gpt-4o",
+                    "description": "OpenAI GPT-4o (Vision + Text)"
+                },
+                {
+                    "model_name": "gpt-4.1",
+                    "description": "OpenAI GPT-4.1 (Stable)"
+                }
+            ]
+            
+            for model_info in openai_models:
+                available_versions.append({
+                    "processor_type": "openai",
+                    "model_name": model_info["model_name"],
+                    "version_string": f"openai|{model_info['model_name']}",
+                    "description": model_info["description"],
+                    "is_default": model_info["model_name"] == "gpt-4.1"
+                })
+        
+        # Mock处理器（用于测试）
+        available_versions.append({
+            "processor_type": "mock",
+            "model_name": "mock-v1.0",
+            "version_string": "mock|mock-v1.0",
+            "description": "Mock processor for testing",
+            "is_default": False
+        })
+        
+        return available_versions
     
     def fit(self, event, data, **kwargs):
         """

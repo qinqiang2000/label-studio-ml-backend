@@ -1,0 +1,74 @@
+# 文档处理器模型配置
+# 这个文件定义了所有支持的AI模型处理器及其配置
+
+# 全局默认设置
+defaults:
+  processor: "gemini"           # 默认使用的处理器类型
+
+# 处理器配置
+processors:
+  
+  # Google Gemini 处理器
+  gemini:
+    type: "gemini"
+    name: "Google Gemini"
+    description: "Google's Gemini AI models for document understanding"
+    enabled: true
+    default_model: "gemini-2.5-flash-preview-04-17"
+    
+    # 环境变量映射
+    env_vars:
+      api_key: "API_KEY"                    # Gemini API密钥
+      model_override: "GEMINI_MODEL"        # 可通过环境变量覆盖默认模型
+      temperature: "GEMINI_TEMPERATURE"     # 温度参数
+      max_output_tokens: "GEMINI_MAX_OUTPUT_TOKENS"
+    
+    # 支持的模型列表
+    models:
+      gemini-2.5-flash-preview-04-17:
+        name: "gemini-2.5-flash-preview-04-17"
+        description: "Gemini 2.5 Flash Preview (tested, recommended)"
+        
+      gemini-2.5-flash-lite-preview-06-17:
+        name: "gemini-2.5-flash-lite-preview-06-17"
+        description: "Gemini 2.5 flash (fastest and cheapest)"
+
+  # OpenAI 处理器  
+  openai:
+    type: "openai"
+    name: "OpenAI"
+    description: "OpenAI's GPT models for document understanding"
+    enabled: true  # 可通过修改这里禁用整个处理器
+    default_model: "gpt-4.1"
+    
+    # 环境变量映射
+    env_vars:
+      api_key: "OPENAI_API_KEY"           # OpenAI API密钥
+      model_override: "OPENAI_MODEL"      # 可通过环境变量覆盖默认模型
+      
+    # 支持的模型列表
+    models:
+      gpt-4.1-mini:
+        name: "gpt-4.1-mini"
+        description: "OpenAI GPT-4.1-mini (fastest and cheapest)"
+        
+      gpt-4.1:
+        name: "gpt-4.1"
+        description: "OpenAI GPT-4.1 (Stable)"
+
+  # Mock 处理器 (用于测试)
+  mock:
+    type: "mock"
+    name: "Mock Processor"
+    description: "Mock processor for testing and development"
+    enabled: true
+    default_model: "mock-v1.0"
+    
+    env_vars: {}  # Mock处理器不需要API密钥
+    
+    models:
+      mock-v1.0:
+        name: "mock-v1.0"
+        description: "Mock processor for testing (returns dummy data)"
+
+# 注意: Excel 分析功能有专门的处理逻辑，不使用此配置中的模型选择 

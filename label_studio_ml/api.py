@@ -245,6 +245,40 @@ def _analyze():
         }), 500
 
 
+@_server.route('/versions', methods=['GET'])
+@exception_handler
+def _get_versions():
+    """
+    Get available model versions
+
+    Example request:
+    GET /versions
+
+    @return:
+    Available model versions in JSON format
+    """
+    data = request.json if request.method == 'POST' else request.args
+    project = data.get('project') if data else None
+    project_id = project.split('.', 1)[0] if project else None
+    
+    try:
+        model = MODEL_CLASS(project_id=project_id, label_config=None)
+        versions_info = model.get_versions()
+        
+        logger.info(f"API: Retrieved versions info with {len(versions_info.get('versions', []))} versions")
+        
+        return jsonify(versions_info)
+        
+    except Exception as e:
+        logger.error(f"API: Error in versions endpoint: {str(e)}", exc_info=True)
+        return jsonify({
+            'versions': [],
+            'current_version': {},
+            'total_count': 0,
+            'error': str(e)
+        }), 500
+
+
 @_server.route('/metrics', methods=['GET'])
 @exception_handler
 def metrics():

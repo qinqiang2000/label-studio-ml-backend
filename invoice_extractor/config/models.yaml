@@ -27,11 +27,11 @@ processors:
     models:
       gemini-2.5-flash-preview-04-17:
         name: "gemini-2.5-flash-preview-04-17"
-        description: "Gemini 2.5 Flash (tested, recommended)"
+        description: "Gemini-2.5-Flash-preview-04-17 (tested, recommended)"
         
-      gemini-2.5-flash-lite-preview-06-17:
-        name: "gemini-2.5-flash-lite-preview-06-17"
-        description: "Gemini 2.5 flash lite (fastest and cheapest)"
+      # gemini-2.5-flash-lite-preview-06-17:
+      #   name: "gemini-2.5-flash-lite-preview-06-17"
+      #   description: "Gemini 2.5 flash lite (fastest and cheapest)"
 
   # OpenAI 处理器  
   openai:
@@ -52,9 +52,9 @@ processors:
         name: "gpt-4.1-mini"
         description: "OpenAI GPT-4.1-mini (fastest and cheapest)"
         
-      gpt-4.1:
-        name: "gpt-4.1"
-        description: "OpenAI GPT-4.1 (Stable)"
+      # gpt-4.1:
+      #   name: "gpt-4.1"
+      #   description: "OpenAI GPT-4.1 (Stable)"
 
   # Mock 处理器 (用于测试)
   mock:
@@ -70,5 +70,3 @@ processors:
       mock-v1.0:
         name: "mock-v1.0"
         description: "Mock processor for testing (returns dummy data)"
-
-# 注意: Excel 分析功能有专门的处理逻辑，不使用此配置中的模型选择 

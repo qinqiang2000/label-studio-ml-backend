@@ -1,11 +1,11 @@
 """
-OpenAI Document Processor for OpenAI models
+OpenAI Document Processor for OpenAI models with Structured Outputs support
 """
 
 import os
 import base64
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 from .base import DocumentProcessor
 
 logger = logging.getLogger(__name__)
@@ -20,14 +20,14 @@ except ImportError:
 
 
 class OpenAIDocumentProcessor(DocumentProcessor):
-    """OpenAI Document Processor"""
+    """OpenAI Document Processor with Structured Outputs support"""
     
-    def __init__(self, model_name: str = "gpt-4.1", **kwargs):
+    def __init__(self, model_name: str = "gpt-4o", **kwargs):
         """
         Initialize OpenAI processor
         
         Args:
-            model_name: OpenAI model name (default: gpt-4.1)
+            model_name: OpenAI model name (default: gpt-4o)
             **kwargs: Additional configuration
         """
         super().__init__()
@@ -85,114 +85,146 @@ class OpenAIDocumentProcessor(DocumentProcessor):
         image_extensions = (".jpg", ".jpeg", ".png", ".bmp", ".gif")
         return filepath.lower().endswith(image_extensions)
     
-    def _process_image_file(self, filepath: str, prompt: str, runtime_config: Optional[Dict] = None) -> str:
+    def _convert_gemini_schema_to_openai(self, schema: Dict) -> Dict:
         """
-        Process image file using OpenAI vision
+        Convert Gemini-style schema to OpenAI Structured Outputs compatible format
+        
+        OpenAI Structured Outputs requirements:
+        1. All properties must be in 'required' array
+        2. Must set 'additionalProperties: false' on all objects
+        3. Optional fields should use Union types with null
+        4. Nested objects must follow same rules
         
         Args:
-            filepath: Path to image file
-            prompt: Processing prompt
-            runtime_config: Runtime configuration
+            schema: Gemini-style JSON schema
             
         Returns:
-            Extracted text content
+            OpenAI Structured Outputs compatible schema
         """
-        try:
-            # Get configuration
-            temperature = runtime_config.get('temperature', 0) if runtime_config else 0
-            max_tokens = runtime_config.get('max_output_tokens', 30000) if runtime_config else 30000
+        def convert_schema_recursive(schema_obj):
+            if not isinstance(schema_obj, dict):
+                return schema_obj
             
-            # Encode image
-            base64_image = self._encode_image(filepath)
+            converted = {}
             
-            # Create OpenAI request for image
-            response = self.client.responses.create(
-                model=self.model_name,
-                input=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "input_text", "text": prompt},
-                            {
-                                "type": "input_image",
-                                "image_url": f"data:image/jpeg;base64,{base64_image}",
-                            }
-                        ],
-                    }
-                ],
-                temperature=temperature,
-                max_output_tokens=max_tokens
-            )
+            for key, value in schema_obj.items():
+                if key == "type":
+                    converted[key] = value
+                elif key == "properties":
+                    # Convert properties recursively
+                    converted_props = {}
+                    for prop_key, prop_value in value.items():
+                        converted_props[prop_key] = convert_schema_recursive(prop_value)
+                    converted[key] = converted_props
+                elif key == "items":
+                    # Convert array items recursively
+                    converted[key] = convert_schema_recursive(value)
+                elif key == "required":
+                    # Will be handled later - collect all property keys
+                    continue
+                else:
+                    converted[key] = value
             
-            return response.output_text
-            
-        except Exception as e:
-            logger.error(f"Failed to process image file {filepath}: {e}")
-            raise
-    
-    def _process_document_file(self, filepath: str, prompt: str, runtime_config: Optional[Dict] = None) -> str:
-        """
-        Process document file using OpenAI file upload
-        
-        Args:
-            filepath: Path to document file
-            prompt: Processing prompt
-            runtime_config: Runtime configuration
-            
-        Returns:
-            Extracted text content
-        """
-        try:
-            # Get configuration
-            temperature = runtime_config.get('temperature', 0) if runtime_config else 0
-            max_tokens = runtime_config.get('max_output_tokens', 300000) if runtime_config else 300000
-            
-            # Upload file to OpenAI
-            file = self.client.files.create(
-                file=open(filepath, "rb"), 
-                purpose="user_data"
-            )
-            file_id = file.id
-            
-            logger.info(f"Uploaded file to OpenAI with ID: {file_id}")
-            
-            try:
-                # Create OpenAI request for document
-                response = self.client.responses.create(
-                    model=self.model_name,
-                    input=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "input_file",
-                                    "file_id": file_id,
-                                }
+            # For objects, ensure all properties are required and additionalProperties is false
+            if converted.get("type") == "object" and "properties" in converted:
+                # Make all properties required for OpenAI strict mode
+                converted["required"] = list(converted["properties"].keys())
+                converted["additionalProperties"] = False
+                
+                # Handle originally optional fields by converting them to Union[Type, null]
+                original_required = schema_obj.get("required", [])
+                all_props = list(converted["properties"].keys())
+                optional_props = [prop for prop in all_props if prop not in original_required]
+                
+                # Convert optional properties to nullable types
+                for prop in optional_props:
+                    prop_schema = converted["properties"][prop]
+                    if isinstance(prop_schema, dict) and "type" in prop_schema:
+                        # Convert to Union type with null
+                        prop_type = prop_schema["type"]
+                        converted["properties"][prop] = {
+                            "anyOf": [
+                                prop_schema,
+                                {"type": "null"}
                             ]
                         }
-                    ],
-                    instructions=prompt,
-                    temperature=temperature,
-                    max_output_tokens=max_tokens,
-                )
-                
-                return response.output_text
-                
-            finally:
-                # Clean up uploaded file
-                try:
-                    self.client.files.delete(file_id)
-                    logger.info(f"Deleted uploaded file: {file_id}")
-                except Exception as cleanup_error:
-                    logger.warning(f"Failed to delete uploaded file {file_id}: {cleanup_error}")
+                        logger.debug(f"Converted optional property '{prop}' to nullable type")
             
-        except Exception as e:
-            logger.error(f"Failed to process document file {filepath}: {e}")
-            raise
+            return converted
+        
+        converted_schema = convert_schema_recursive(schema)
+        logger.info("Converted Gemini schema to OpenAI Structured Outputs format")
+        return converted_schema
+
+    def _create_response_format(self, response_schema: Optional[Dict]) -> Optional[Dict]:
+        """
+        Create response_format for structured outputs
+        
+        Args:
+            response_schema: JSON schema for response format (Gemini format)
+            
+        Returns:
+            Formatted response_format dict for OpenAI API
+        """
+        if not response_schema:
+            return None
+        
+        # Convert Gemini schema to OpenAI Structured Outputs format
+        openai_schema = self._convert_gemini_schema_to_openai(response_schema)
+        
+        # Standard OpenAI structured outputs format
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "structured_response",
+                "strict": True,
+                "schema": openai_schema
+            }
+        }
+    
+    def _prepare_message_content(self, filepath: str, prompt: str) -> list:
+        """
+        Prepare message content for OpenAI API
+        
+        Args:
+            filepath: Path to file
+            prompt: Processing prompt
+            
+        Returns:
+            List of content items for the message
+        """
+        content = [{"type": "input_text", "text": prompt}]
+        
+        if self._is_image_file(filepath):
+            # Handle image files with base64 encoding
+            base64_image = self._encode_image(filepath)
+            content.append({
+                "type": "input_image",
+                "image_url": f"data:image/jpeg;base64,{base64_image}"
+            })
+        else:
+            # For non-image files, we need to upload them first
+            try:
+                with open(filepath, "rb") as file:
+                    uploaded_file = self.client.files.create(
+                        file=file,
+                        purpose="vision"  # This purpose works for document analysis too
+                    )
+                    content.append({
+                        "type": "input_image",  # Responses API uses input_image for files too
+                        "file_id": uploaded_file.id
+                    })
+                    # Store file_id for cleanup
+                    self._uploaded_file_id = uploaded_file.id
+            except Exception as e:
+                logger.error(f"Failed to upload file {filepath}: {e}")
+                raise
+        
+        return content
     
     def process_document(self, file_path: str, instruction: str, runtime_config: Optional[Dict] = None) -> str:
         """
-        Process document using OpenAI GPT-4.1
+        Process document using OpenAI Responses API with Structured Outputs support
         
         Args:
             file_path: Path to document file
@@ -200,9 +232,11 @@ class OpenAIDocumentProcessor(DocumentProcessor):
             runtime_config: Runtime configuration with options:
                 - temperature: Sampling temperature (0.0-2.0)
                 - max_output_tokens: Maximum output tokens
+                - response_schema: JSON schema for structured outputs
+                - response_mime_type: Response MIME type (for compatibility)
                 
         Returns:
-            Processed document content as string
+            Processed document content as string (JSON if schema provided)
         """
         if not self.client:
             raise RuntimeError("OpenAI client not initialized")
@@ -213,20 +247,106 @@ class OpenAIDocumentProcessor(DocumentProcessor):
         logger.info(f"Processing document with OpenAI {self.model_name}: {file_path}")
         
         try:
-            # Choose processing method based on file type
-            if self._is_image_file(file_path):
-                logger.info(f"Processing as image file: {file_path}")
-                result = self._process_image_file(file_path, instruction, runtime_config)
-            else:
-                logger.info(f"Processing as document file: {file_path}")
-                result = self._process_document_file(file_path, instruction, runtime_config)
+            # Get runtime configuration
+            temperature = runtime_config.get('temperature', 0.1) if runtime_config else 0.1
+            max_tokens = runtime_config.get('max_output_tokens', 4096) if runtime_config else 4096
+            response_schema = runtime_config.get('response_schema') if runtime_config else None
             
-            logger.info(f"Successfully processed document with OpenAI, result length: {len(result) if result else 0}")
+            # Prepare message content
+            content = self._prepare_message_content(file_path, instruction)
+            
+            # Prepare API parameters
+            api_params = {
+                "model": self.model_name,
+                "input": [{
+                    "role": "user",
+                    "content": content
+                }],
+                "temperature": temperature,
+                "max_output_tokens": max_tokens
+            }
+            
+            # Add response format for structured outputs
+            response_format = self._create_response_format(response_schema)
+            if response_format:
+                api_params["response_format"] = response_format
+                logger.info("Using structured outputs with response schema")
+            
+            logger.info(f"Calling OpenAI API with parameters: {api_params.keys()}")
+            
+            # Choose API based on whether we need structured outputs
+            if response_format:
+                # Use chat.completions.create for structured outputs support
+                messages = []
+                for input_item in api_params["input"]:
+                    if input_item["role"] == "user":
+                        messages.append({
+                            "role": "user",
+                            "content": input_item["content"]
+                        })
+                
+                chat_params = {
+                    "model": api_params["model"],
+                    "messages": messages,
+                    "temperature": api_params["temperature"],
+                    "max_tokens": api_params["max_output_tokens"],
+                    "response_format": response_format
+                }
+                
+                response = self.client.chat.completions.create(**chat_params)
+                
+                # Convert chat completion response to responses-like format
+                class MockResponse:
+                    def __init__(self, chat_response):
+                        self.output_text = chat_response.choices[0].message.content
+                        self.output = [
+                            type('obj', (object,), {
+                                'content': [
+                                    type('obj', (object,), {
+                                        'text': chat_response.choices[0].message.content
+                                    })()
+                                ]
+                            })()
+                        ]
+                
+                response = MockResponse(response)
+            else:
+                # Use responses.create for regular processing
+                response = self.client.responses.create(**api_params)
+            
+            # Extract response content
+            result = None
+            if hasattr(response, 'output_text') and response.output_text:
+                result = response.output_text
+            elif hasattr(response, 'output') and response.output:
+                # Extract text from output messages
+                for output_item in response.output:
+                    if hasattr(output_item, 'content') and output_item.content:
+                        for content_item in output_item.content:
+                            if hasattr(content_item, 'text'):
+                                result = content_item.text
+                                break
+                    if result:
+                        break
+            
+            if not result:
+                raise RuntimeError("No response content received from OpenAI")
+            
+            logger.info(f"Successfully processed document with OpenAI, result length: {len(result)}")
             return result
             
         except Exception as e:
             logger.error(f"Document processing failed: {e}")
             raise RuntimeError(f"OpenAI document processing failed: {str(e)}") from e
+        finally:
+            # Clean up uploaded files
+            if hasattr(self, '_uploaded_file_id'):
+                try:
+                    self.client.files.delete(self._uploaded_file_id)
+                    logger.info(f"Deleted uploaded file: {self._uploaded_file_id}")
+                    delattr(self, '_uploaded_file_id')
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to delete uploaded file: {cleanup_error}")
     
     def get_supported_formats(self) -> list:
         """Get supported file formats"""
@@ -262,4 +382,20 @@ class OpenAIDocumentProcessor(DocumentProcessor):
                 logger.error(f"Invalid max_output_tokens: {max_tokens}. Must be positive integer")
                 return False
         
+        # Validate response_schema
+        if 'response_schema' in runtime_config:
+            schema = runtime_config['response_schema']
+            if schema is not None and not isinstance(schema, dict):
+                logger.error(f"Invalid response_schema: {type(schema)}. Must be a dict or None")
+                return False
+            
+            # Basic schema validation
+            if schema and 'type' not in schema:
+                logger.error("response_schema must contain 'type' field")
+                return False
+        
+        return True
+    
+    def supports_structured_outputs(self) -> bool:
+        """Check if this processor supports structured outputs"""
         return True

@@ -63,7 +63,55 @@ Check the **Required parameters** column to see if you need to set any additiona
 | [spacy](/label_studio_ml/examples/spacy)                                                   | NER by [SpaCy](https://spacy.io/)                                                                                                                    | ✅              | ❌                | ❌        | None                       | Set      [(see documentation)](https://spacy.io/usage/linguistic-features) |
 | [tesseract](/label_studio_ml/examples/tesseract)                                           | Interactive OCR. [Details](https://github.com/tesseract-ocr/tesseract)                                                                               | ❌              | ✅                | ❌        | None                       | Set (characters)                                                           | 
 | [watsonX](/label_studio_ml/exampels/watsonx)| LLM inference with [WatsonX](https://www.ibm.com/products/watsonx-ai) and integration with [WatsonX.data](watsonx.data)| ✅ | ✅| ❌ | None| Arbitrary|
+| [invoice_extractor](/invoice_extractor)                                                    | Invoice Extractor with AI capabilities | ✅              | ✅                | ❌        | See below                 | Arbitrary |
 | [yolo](/label_studio_ml/examples/yolo)                                                     | All YOLO tasks are supported: [YOLO](https://docs.ultralytics.com/tasks/) | ✅ | ❌ | ❌ | None | Arbitrary |
+
+# Invoice Extractor
+
+The Invoice Extractor is a specialized ML backend designed for extracting information from invoices.
+
+## Installation
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/HumanSignal/label-studio-ml-backend.git
+    cd label-studio-ml-backend/
+    ```
+2.  **Install base dependencies:**
+    ```bash
+    pip install -e .
+    cd invoice_extractor
+    pip install -r requirements-base.txt
+    pip install -r requirements.txt
+    ```
+
+## Configuration via .env
+
+The `invoice_extractor` model uses environment variables for configuration. You can create a `.env` file in the `invoice_extractor/` directory to set these variables.
+
+**Example .env file:**
+
+```
+OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
+# Add other necessary environment variables here, e.g., for Google Gemini or other LLMs
+GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+```
+
+**Note:** Ensure you replace `"YOUR_OPENAI_API_KEY"` and `"YOUR_GEMINI_API_KEY"` with your actual API keys. Refer to `invoice_extractor/processors/` for specific processor configurations.
+
+## Running the Invoice Extractor
+
+To start the Invoice Extractor ML backend without Docker (for example, for debugging purposes), use the following command from the `label-studio-ml-backend/` directory:
+
+```bash
+label-studio-ml start ./invoice_extractor
+```
+
+You can modify the port using the `-p` parameter:
+
+```bash
+label-studio-ml start ./invoice_extractor -p 9091
+```
 
 # (Advanced usage) Develop your model
 

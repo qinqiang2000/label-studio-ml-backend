@@ -56,6 +56,26 @@ processors:
       #   name: "gpt-4.1"
       #   description: "OpenAI GPT-4.1 (Stable)"
 
+  # PiaoZone 处理器
+  piaozone:
+    type: "piaozone"
+    name: "PiaoZone"
+    description: "PiaoZone AI API for document understanding"
+    enabled: true
+    default_model: "gemini-2.5-flash-preview-04-17"
+    
+    # 环境变量映射
+    env_vars:
+      access_token: "PIAOZONE_ACCESS_TOKEN"     # PiaoZone Access Token
+      api_url: "PIAOZONE_API_URL"               # PiaoZone API URL
+      model_override: "PIAOZONE_MODEL"          # 可通过环境变量覆盖默认模型
+      
+    # 支持的模型列表
+    models:
+      gemini-2.5-flash-preview-04-17:
+        name: "gemini-2.5-flash-preview-04-17"
+        description: "Gemini-2.5-Flash-preview-04-17 via PiaoZone API"
+
   # Mock 处理器 (用于测试)
   mock:
     type: "mock"

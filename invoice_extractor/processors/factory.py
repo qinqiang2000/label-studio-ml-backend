@@ -11,6 +11,13 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
+# Try to import PiaoZone processor
+try:
+    from processors.piaozone import PiaoZoneProcessor
+    PIAOZONE_AVAILABLE = True
+except ImportError:
+    PIAOZONE_AVAILABLE = False
+
 # Import config manager
 try:
     from config.manager import config_manager
@@ -32,6 +39,10 @@ class DocumentProcessorFactory:
     # Add OpenAI processor if available
     if OPENAI_AVAILABLE:
         _processors['openai'] = OpenAIDocumentProcessor
+    
+    # Add PiaoZone processor if available
+    if PIAOZONE_AVAILABLE:
+        _processors['piaozone'] = PiaoZoneProcessor
     
     @classmethod
     def create_processor(cls, processor_type: str, **kwargs) -> DocumentProcessor:

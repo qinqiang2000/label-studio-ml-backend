@@ -66,9 +66,28 @@ processors:
     
     # 环境变量映射
     env_vars:
-      access_token: "PIAOZONE_ACCESS_TOKEN"     # PiaoZone Access Token
+      # Token相关配置（两种方式）
+      # 方式1：静态token（向后兼容）
+      access_token: "PIAOZONE_ACCESS_TOKEN"     # PiaoZone Access Token (静态)
+      
+      # 方式2：动态token获取（推荐）
+      client_id: "PIAOZONE_CLIENT_ID"           # PiaoZone Client ID
+      client_secret: "PIAOZONE_CLIENT_SECRET"   # PiaoZone Client Secret
+      token_url: "PIAOZONE_TOKEN_URL"           # Token获取URL
+      token_duration_hours: "PIAOZONE_TOKEN_DURATION_HOURS"  # Token有效期（小时）
+      
+      # API配置
       api_url: "PIAOZONE_API_URL"               # PiaoZone API URL
       model_override: "PIAOZONE_MODEL"          # 可通过环境变量覆盖默认模型
+      
+      # 模型参数配置
+      temperature: "PIAOZONE_TEMPERATURE"       # 温度参数
+      max_output_tokens: "PIAOZONE_MAX_OUTPUT_TOKENS"  # 最大输出token数
+      top_p: "PIAOZONE_TOP_P"                   # Top-p采样
+      top_k: "PIAOZONE_TOP_K"                   # Top-k采样
+      seed: "PIAOZONE_SEED"                     # 随机种子
+      response_mime_type: "PIAOZONE_RESPONSE_MIME_TYPE"  # 响应MIME类型
+      thinking_budget: "PIAOZONE_THINKING_BUDGET"  # 深度思考预算
       
     # 支持的模型列表
     models:

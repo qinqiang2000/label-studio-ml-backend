@@ -14,7 +14,7 @@ processors:
     name: "Google Gemini"
     description: "Google's Gemini AI models for document understanding"
     enabled: true
-    default_model: "gemini-2.5-flash-preview-04-17"
+    default_model: "gemini-2.5-flash"
     
     # 环境变量映射
     env_vars:
@@ -25,9 +25,9 @@ processors:
     
     # 支持的模型列表
     models:
-      gemini-2.5-flash-preview-04-17:
-        name: "gemini-2.5-flash-preview-04-17"
-        description: "Gemini-2.5-Flash-preview-04-17 (tested, recommended)"
+      gemini-2.5-flash:
+        name: "gemini-2.5-flash"
+        description: "Gemini-2.5-Flash(tested, recommended)"
         
       # gemini-2.5-flash-lite-preview-06-17:
       #   name: "gemini-2.5-flash-lite-preview-06-17"
@@ -62,7 +62,7 @@ processors:
     name: "PiaoZone"
     description: "PiaoZone AI API for document understanding"
     enabled: true
-    default_model: "gemini-2.5-flash-preview-04-17"
+    default_model: "gemini-2.5-flash"
     
     # 环境变量映射
     env_vars:
@@ -91,9 +91,9 @@ processors:
       
     # 支持的模型列表
     models:
-      gemini-2.5-flash-preview-04-17:
-        name: "gemini-2.5-flash-preview-04-17"
-        description: "Gemini-2.5-Flash-preview-04-17 via PiaoZone API"
+      gemini-2.5-flash:
+        name: "gemini-2.5-flash"
+        description: "Gemini-2.5-flash via PiaoZone API"
 
   # Mock 处理器 (用于测试)
   mock:

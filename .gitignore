@@ -137,3 +137,6 @@ dmypy.json
 .github/actions-hub
 
 .idea/.vscode/
+
+# IDE configurations
+/.vscode/

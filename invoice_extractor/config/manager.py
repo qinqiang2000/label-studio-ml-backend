@@ -5,6 +5,7 @@
 import os
 import yaml
 import logging
+import ipaddress
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
@@ -81,7 +82,12 @@ class ConfigManager:
         """解析原始配置为结构化数据"""
         parsed_config = {
             'defaults': raw_config.get('defaults', {}),
-            'processors': {}
+            'processors': {},
+            'ip_whitelist': raw_config.get('ip_whitelist', {
+                'enabled': False,
+                'allowed_ips': [],
+                'env_vars': {}
+            })
         }
         
         # 解析处理器配置
@@ -234,6 +240,158 @@ class ConfigManager:
         """重新加载配置"""
         logger.info("Reloading configuration...")
         self.load_config()
+    
+    def get_ip_whitelist_config(self) -> Dict[str, Any]:
+        """
+        获取 IP 白名单配置
+        
+        Returns:
+            Dict containing IP whitelist configuration
+        """
+        config = self._config.get('ip_whitelist', {
+            'enabled': False,
+            'allowed_ips': [],
+            'env_vars': {}
+        })
+        
+        # 检查环境变量覆盖
+        env_vars = config.get('env_vars', {})
+        
+        # 检查是否启用 (环境变量优先)
+        enabled_env_var = env_vars.get('enabled')
+        if enabled_env_var:
+            env_enabled = os.environ.get(enabled_env_var)
+            if env_enabled is not None:
+                config['enabled'] = env_enabled.lower() in ('true', '1', 'yes', 'on')
+        
+        # 检查允许的IP列表 (环境变量优先)
+        allowed_ips_env_var = env_vars.get('allowed_ips')
+        if allowed_ips_env_var:
+            env_allowed_ips = os.environ.get(allowed_ips_env_var)
+            if env_allowed_ips:
+                # 环境变量格式: "ip1,ip2,ip3"
+                env_ip_list = [ip.strip() for ip in env_allowed_ips.split(',') if ip.strip()]
+                if env_ip_list:
+                    config['allowed_ips'] = env_ip_list
+                    logger.info(f"Using allowed IPs from environment variable: {env_ip_list}")
+        
+        return config
+    
+    def is_ip_allowed(self, client_ip: str) -> bool:
+        """
+        检查 IP 是否在白名单中
+        
+        Args:
+            client_ip: 客户端IP地址
+            
+        Returns:
+            bool: True if IP is allowed, False otherwise
+        """
+        try:
+            whitelist_config = self.get_ip_whitelist_config()
+            
+            # 如果白名单功能未启用，允许所有访问
+            if not whitelist_config.get('enabled', False):
+                logger.debug("IP whitelist is disabled, allowing all access")
+                return True
+            
+            allowed_ips = whitelist_config.get('allowed_ips', [])
+            if not allowed_ips:
+                logger.warning("IP whitelist is enabled but no IPs are configured, denying access")
+                return False
+            
+            # 将客户端IP转换为IP地址对象
+            try:
+                client_ip_obj = ipaddress.ip_address(client_ip)
+            except ValueError as e:
+                logger.error(f"Invalid client IP format '{client_ip}': {e}")
+                return False
+            
+            # 检查是否在允许列表中
+            for allowed_ip in allowed_ips:
+                if self._ip_matches(client_ip_obj, allowed_ip):
+                    logger.debug(f"Client IP '{client_ip}' matches allowed pattern '{allowed_ip}'")
+                    return True
+            
+            logger.warning(f"Client IP '{client_ip}' not in whitelist: {allowed_ips}")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking IP whitelist for '{client_ip}': {e}")
+            # 出错时默认拒绝访问（安全优先）
+            return False
+    
+    def _ip_matches(self, client_ip_obj, allowed_pattern: str) -> bool:
+        """
+        检查客户端IP是否匹配允许的模式
+        
+        Args:
+            client_ip_obj: ipaddress.IPv4Address 或 ipaddress.IPv6Address 对象
+            allowed_pattern: 允许的IP模式（单个IP或CIDR网段）
+            
+        Returns:
+            bool: True if matches, False otherwise
+        """
+        try:
+            allowed_pattern = allowed_pattern.strip()
+            
+            # 处理特殊值
+            if allowed_pattern.lower() in ('localhost', '127.0.0.1', '::1'):
+                # 将 localhost 转换为相应的IP地址
+                if allowed_pattern.lower() == 'localhost':
+                    return str(client_ip_obj) in ('127.0.0.1', '::1')
+                else:
+                    return str(client_ip_obj) == allowed_pattern
+            
+            # 检查是否是CIDR网段
+            if '/' in allowed_pattern:
+                try:
+                    allowed_network = ipaddress.ip_network(allowed_pattern, strict=False)
+                    return client_ip_obj in allowed_network
+                except ValueError as e:
+                    logger.error(f"Invalid CIDR pattern '{allowed_pattern}': {e}")
+                    return False
+            else:
+                # 单个IP地址
+                try:
+                    allowed_ip_obj = ipaddress.ip_address(allowed_pattern)
+                    return client_ip_obj == allowed_ip_obj
+                except ValueError as e:
+                    logger.error(f"Invalid IP pattern '{allowed_pattern}': {e}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Error matching IP '{client_ip_obj}' against pattern '{allowed_pattern}': {e}")
+            return False
+    
+    def validate_ip_format(self, ip_str: str) -> bool:
+        """
+        验证 IP 地址格式（支持 CIDR 和特殊值）
+        
+        Args:
+            ip_str: IP地址字符串
+            
+        Returns:
+            bool: True if valid, False otherwise
+        """
+        try:
+            ip_str = ip_str.strip()
+            
+            # 检查特殊值
+            if ip_str.lower() in ('localhost', '127.0.0.1', '::1'):
+                return True
+            
+            # 检查CIDR网段
+            if '/' in ip_str:
+                ipaddress.ip_network(ip_str, strict=False)
+                return True
+            else:
+                # 单个IP地址
+                ipaddress.ip_address(ip_str)
+                return True
+                
+        except ValueError:
+            return False
 
 
 # 全局配置管理器实例

@@ -316,10 +316,55 @@ def check_auth():
             return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
 
 
+def get_client_ip(request):
+    """智能获取客户端真实IP地址"""
+    # 按优先级检查各种header
+    ip_headers = [
+        'X-Forwarded-For',
+        'X-Real-IP', 
+        'X-Client-IP',
+        'CF-Connecting-IP'
+    ]
+    
+    for header in ip_headers:
+        ip_list = request.headers.get(header)
+        if ip_list:
+            # X-Forwarded-For 可能包含多个IP，取第一个
+            first_ip = ip_list.split(',')[0].strip()
+            if first_ip and first_ip != 'unknown':
+                return first_ip
+    
+    # 最后使用 remote_addr
+    return request.remote_addr
+
+
 @_server.before_request
 def log_request_info():
     logger.debug('Request headers: %s', request.headers)
     logger.debug('Request body: %s', request.get_data())
+    
+    # 详细的客户端 IP 检测和打印
+    remote_addr = request.remote_addr
+    x_forwarded_for = request.headers.get('X-Forwarded-For')
+    x_real_ip = request.headers.get('X-Real-IP')
+    x_client_ip = request.headers.get('X-Client-IP')
+    cf_connecting_ip = request.headers.get('CF-Connecting-IP')  # Cloudflare
+    user_agent = request.headers.get('User-Agent', '')[:100]  # 限制长度
+    
+    print(f"=== CLIENT IP DETECTION ===")
+    print(f"request.remote_addr: {remote_addr}")
+    print(f"X-Forwarded-For: {x_forwarded_for}")
+    print(f"X-Real-IP: {x_real_ip}")
+    print(f"X-Client-IP: {x_client_ip}")
+    print(f"CF-Connecting-IP: {cf_connecting_ip}")
+    print(f"User-Agent: {user_agent}")
+    print(f"Request URL: {request.url}")
+    print(f"Request Method: {request.method}")
+    
+    # 使用智能解析函数获取最佳IP
+    detected_ip = get_client_ip(request)
+    print(f"Detected Client IP: {detected_ip}")
+    print("===========================")
 
 
 @_server.after_request

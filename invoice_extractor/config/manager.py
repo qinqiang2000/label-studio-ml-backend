@@ -82,12 +82,7 @@ class ConfigManager:
         """解析原始配置为结构化数据"""
         parsed_config = {
             'defaults': raw_config.get('defaults', {}),
-            'processors': {},
-            'ip_whitelist': raw_config.get('ip_whitelist', {
-                'enabled': False,
-                'allowed_ips': [],
-                'env_vars': {}
-            })
+            'processors': {}
         }
         
         # 解析处理器配置
@@ -243,43 +238,35 @@ class ConfigManager:
     
     def get_ip_whitelist_config(self) -> Dict[str, Any]:
         """
-        获取 IP 白名单配置
+        获取 IP 白名单配置（纯环境变量方案）
         
         Returns:
             Dict containing IP whitelist configuration
         """
-        config = self._config.get('ip_whitelist', {
-            'enabled': False,
-            'allowed_ips': [],
-            'env_vars': {}
-        })
+        # 检查是否启用白名单
+        enabled = os.environ.get('IP_WHITELIST_ENABLED', 'false').lower() in ('true', '1', 'yes', 'on')
         
-        # 检查环境变量覆盖
-        env_vars = config.get('env_vars', {})
+        # 获取允许的 IP 列表
+        allowed_ips_str = os.environ.get('ALLOWED_IPS', '').strip()
+        allowed_ips = [ip.strip() for ip in allowed_ips_str.split(',') if ip.strip()] if allowed_ips_str else []
         
-        # 检查是否启用 (环境变量优先)
-        enabled_env_var = env_vars.get('enabled')
-        if enabled_env_var:
-            env_enabled = os.environ.get(enabled_env_var)
-            if env_enabled is not None:
-                config['enabled'] = env_enabled.lower() in ('true', '1', 'yes', 'on')
+        config = {
+            'enabled': enabled,
+            'allowed_ips': allowed_ips
+        }
         
-        # 检查允许的IP列表 (环境变量优先)
-        allowed_ips_env_var = env_vars.get('allowed_ips')
-        if allowed_ips_env_var:
-            env_allowed_ips = os.environ.get(allowed_ips_env_var)
-            if env_allowed_ips:
-                # 环境变量格式: "ip1,ip2,ip3"
-                env_ip_list = [ip.strip() for ip in env_allowed_ips.split(',') if ip.strip()]
-                if env_ip_list:
-                    config['allowed_ips'] = env_ip_list
-                    logger.info(f"Using allowed IPs from environment variable: {env_ip_list}")
+        if enabled and allowed_ips:
+            logger.info(f"IP whitelist enabled with IPs: {allowed_ips}")
+        elif enabled:
+            logger.info("IP whitelist enabled, only local access allowed")
+        else:
+            logger.debug("IP whitelist disabled")
         
         return config
     
     def is_ip_allowed(self, client_ip: str) -> bool:
         """
-        检查 IP 是否在白名单中
+        检查 IP 是否在白名单中（简化版本）
         
         Args:
             client_ip: 客户端IP地址
@@ -288,26 +275,32 @@ class ConfigManager:
             bool: True if IP is allowed, False otherwise
         """
         try:
-            whitelist_config = self.get_ip_whitelist_config()
-            
-            # 如果白名单功能未启用，允许所有访问
-            if not whitelist_config.get('enabled', False):
-                logger.debug("IP whitelist is disabled, allowing all access")
+            # 1. 本地地址始终允许
+            if client_ip in ('127.0.0.1', '::1') or client_ip.lower() == 'localhost':
+                logger.debug(f"Local IP '{client_ip}' automatically allowed")
                 return True
             
-            allowed_ips = whitelist_config.get('allowed_ips', [])
-            if not allowed_ips:
-                logger.warning("IP whitelist is enabled but no IPs are configured, denying access")
+            # 2. 检查是否启用白名单
+            enabled = os.environ.get('IP_WHITELIST_ENABLED', 'false').lower() in ('true', '1', 'yes', 'on')
+            if not enabled:
+                logger.debug("IP whitelist disabled, allowing all access")
+                return True
+            
+            # 3. 获取允许的 IP 列表
+            allowed_ips_str = os.environ.get('ALLOWED_IPS', '').strip()
+            if not allowed_ips_str:
+                logger.warning(f"IP whitelist enabled but no IPs configured, denying access for '{client_ip}'")
                 return False
             
-            # 将客户端IP转换为IP地址对象
+            allowed_ips = [ip.strip() for ip in allowed_ips_str.split(',') if ip.strip()]
+            
+            # 4. 检查 IP 是否在列表中
             try:
                 client_ip_obj = ipaddress.ip_address(client_ip)
             except ValueError as e:
                 logger.error(f"Invalid client IP format '{client_ip}': {e}")
                 return False
             
-            # 检查是否在允许列表中
             for allowed_ip in allowed_ips:
                 if self._ip_matches(client_ip_obj, allowed_ip):
                     logger.debug(f"Client IP '{client_ip}' matches allowed pattern '{allowed_ip}'")

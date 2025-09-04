@@ -6,7 +6,10 @@
       "Bash(ls:*)",
       "Bash(rm:*)",
       "WebFetch(domain:ai.google.dev)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }

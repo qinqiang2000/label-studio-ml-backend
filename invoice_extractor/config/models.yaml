@@ -109,3 +109,51 @@ processors:
       mock-v1.0:
         name: "mock-v1.0"
         description: "Mock processor for testing (returns dummy data)"
+
+# IP 访问控制配置
+ip_whitelist:
+  enabled: true                     # 启用/禁用 IP 白名单功能
+  allowed_ips:                      # 允许访问的 IP 列表
+    - "120.77.56.227"              # 指定IP地址
+    # - "192.168.1.0/24"           # CIDR网段格式
+    # - "127.0.0.1"                # 本地访问
+    # - "::1"                      # IPv6本地访问
+  
+  # 环境变量覆盖设置
+  env_vars:
+    allowed_ips: "ALLOWED_IPS"      # 环境变量名，用逗号分隔多个IP
+    enabled: "IP_WHITELIST_ENABLED" # 环境变量控制是否启用
+  
+  # ==================== 配置示例和说明 ====================
+  
+  # 1. 全部放开访问 (生产环境不推荐):
+  # enabled: false
+  
+  # 2. 只允许本地访问:
+  # allowed_ips:
+  #   - "127.0.0.1"
+  #   - "::1"
+  #   - "localhost"
+  
+  # 3. 允许特定网段:
+  # allowed_ips: 
+  #   - "192.168.0.0/16"    # 内网段
+  #   - "10.0.0.0/8"        # 私有网段
+  #   - "172.16.0.0/12"     # 私有网段
+  
+  # 4. 混合配置（单IP + 网段）:
+  # allowed_ips:
+  #   - "120.77.56.227"     # 特定服务器
+  #   - "192.168.1.0/24"    # 办公室网段
+  #   - "10.0.0.0/8"        # VPN网段
+  
+  # 5. 环境变量覆盖示例:
+  # export IP_WHITELIST_ENABLED=true
+  # export ALLOWED_IPS="120.77.56.227,192.168.1.100,10.0.0.0/8"
+  
+  # ==================== 注意事项 ====================
+  # - 支持 IPv4 和 IPv6 地址
+  # - 支持 CIDR 网段格式 (例如: 192.168.1.0/24)
+  # - 环境变量优先级高于配置文件
+  # - enabled: false 将完全禁用白名单检查
+  # - 生产环境建议启用白名单保护

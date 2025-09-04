@@ -308,6 +308,50 @@ def safe_str_cmp(a, b):
 
 
 @_server.before_request
+def check_ip_whitelist():
+    """检查客户端 IP 是否在白名单中"""
+    try:
+        # 尝试导入配置管理器
+        try:
+            # 使用相对路径导入，适应不同的启动方式
+            import sys
+            import os
+            
+            # 添加 invoice_extractor 目录到路径
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
+            invoice_extractor_path = os.path.join(project_root, 'invoice_extractor')
+            
+            if invoice_extractor_path not in sys.path:
+                sys.path.insert(0, invoice_extractor_path)
+            
+            from config.manager import config_manager
+            
+        except ImportError as e:
+            logger.warning(f"Cannot import config manager for IP whitelist: {e}, allowing access")
+            return  # 配置管理器不可用时，允许访问
+        
+        # 获取客户端IP
+        client_ip = request.remote_addr
+        
+        # 检查IP是否被允许
+        if not config_manager.is_ip_allowed(client_ip):
+            logger.warning(f"Access denied for IP: {client_ip}")
+            return jsonify({
+                'error': 'Access denied',
+                'message': 'Your IP address is not authorized to access this service',
+                'status': 'forbidden'
+            }), 403
+        
+        logger.debug(f"IP whitelist check passed for: {client_ip}")
+        
+    except Exception as e:
+        logger.error(f"Error in IP whitelist check: {e}")
+        # 出现异常时允许访问，避免服务中断
+        return
+
+
+@_server.before_request
 def check_auth():
     if BASIC_AUTH is not None:
 
@@ -316,10 +360,65 @@ def check_auth():
             return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
 
 
+def get_client_ip(request):
+    """智能获取客户端真实IP地址"""
+    # 按优先级检查各种header
+    ip_headers = [
+        'X-Forwarded-For',
+        'X-Real-IP', 
+        'X-Client-IP',
+        'CF-Connecting-IP'
+    ]
+    
+    for header in ip_headers:
+        ip_list = request.headers.get(header)
+        if ip_list:
+            # X-Forwarded-For 可能包含多个IP，取第一个
+            first_ip = ip_list.split(',')[0].strip()
+            if first_ip and first_ip != 'unknown':
+                return first_ip
+    
+    # 最后使用 remote_addr
+    return request.remote_addr
+
+
 @_server.before_request
 def log_request_info():
     logger.debug('Request headers: %s', request.headers)
     logger.debug('Request body: %s', request.get_data())
+    
+    # IP 检测信息（仅在调试模式或特定环境变量时显示详细信息）
+    show_detailed_ip_info = (
+        logger.isEnabledFor(logging.DEBUG) or 
+        os.environ.get('SHOW_IP_DETECTION_DETAILS', '').lower() in ('true', '1', 'yes')
+    )
+    
+    if show_detailed_ip_info:
+        # 详细的客户端 IP 检测和打印
+        remote_addr = request.remote_addr
+        x_forwarded_for = request.headers.get('X-Forwarded-For')
+        x_real_ip = request.headers.get('X-Real-IP')
+        x_client_ip = request.headers.get('X-Client-IP')
+        cf_connecting_ip = request.headers.get('CF-Connecting-IP')  # Cloudflare
+        user_agent = request.headers.get('User-Agent', '')[:100]  # 限制长度
+        
+        print(f"=== CLIENT IP DETECTION ===")
+        print(f"request.remote_addr: {remote_addr}")
+        print(f"X-Forwarded-For: {x_forwarded_for}")
+        print(f"X-Real-IP: {x_real_ip}")
+        print(f"X-Client-IP: {x_client_ip}")
+        print(f"CF-Connecting-IP: {cf_connecting_ip}")
+        print(f"User-Agent: {user_agent}")
+        print(f"Request URL: {request.url}")
+        print(f"Request Method: {request.method}")
+        
+        # 使用智能解析函数获取最佳IP
+        detected_ip = get_client_ip(request)
+        print(f"Detected Client IP: {detected_ip}")
+        print("===========================")
+    else:
+        # 简化的日志记录
+        logger.debug(f"Request from IP: {request.remote_addr} to {request.url}")
 
 
 @_server.after_request

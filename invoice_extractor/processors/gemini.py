@@ -194,6 +194,13 @@ class GeminiProcessor(DocumentProcessor):
         # 合并运行时配置：runtime_config > 默认配置
         merged_config = {**self.llm_param_config}
         if runtime_config:
+            # Handle thinking_budget from Label Studio - convert to thinking_config
+            if 'thinking_budget' in runtime_config:
+                thinking_budget = runtime_config.pop('thinking_budget')
+                if isinstance(thinking_budget, int) and thinking_budget > 0:
+                    merged_config['thinking_config'] = types.ThinkingConfig(thinking_budget=thinking_budget)
+                    logger.info(f"Converted thinking_budget {thinking_budget} to ThinkingConfig")
+            
             merged_config.update(runtime_config)
             logger.debug(f"Applied runtime config: {runtime_config}")
         

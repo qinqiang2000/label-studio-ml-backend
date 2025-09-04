@@ -209,7 +209,7 @@ class GeminiProcessor(DocumentProcessor):
         generate_content_config = types.GenerateContentConfig(**param_config)
         
         logger.info(f'calling genai: {self.model_name}')
-        logger.info(f'Model configuration: {param_config}')
+        logger.info(f'Model configuration: {generate_content_config}')
         
         response = self.client.models.generate_content(
             model=self.model_name,

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class GeminiLMModelParams(BaseModel):
     temperature: Optional[float] = Field(
-        0.1,
+        0.0,
         description="温度：较高的数值会使输出更加随机，而较低的数值会使其更加集中和确定。如果设置为0，模型将使用对数概率自动增加温度，直到达到某些阈值。"
     )
     seed: Optional[int] = Field(None, description="随机种子")

@@ -4,7 +4,9 @@
       "Bash(python test:*)",
       "Bash(python:*)",
       "Bash(ls:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "WebFetch(domain:ai.google.dev)",
+      "WebSearch"
     ],
     "deny": []
   }

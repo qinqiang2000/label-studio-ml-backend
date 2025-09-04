@@ -16,7 +16,7 @@ class GeminiLMModelParams(BaseModel):
         0.1,
         description="温度：较高的数值会使输出更加随机，而较低的数值会使其更加集中和确定。如果设置为0，模型将使用对数概率自动增加温度，直到达到某些阈值。"
     )
-    seed: Optional[int] = Field(12345, description="随机种子")
+    seed: Optional[int] = Field(None, description="随机种子")
     top_p: Optional[float] = Field(
         None,
         description="模型仅考虑概率累积为 top_p 的 token 结果。"

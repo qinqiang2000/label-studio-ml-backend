@@ -16,7 +16,7 @@ from label_studio_ml.response import ModelResponse
 from label_studio_sdk.label_interface.objects import PredictionValue
 from prompt import prompt
 import dotenv
-from utils import should_use_mock_data
+from utils import should_use_mock_data, format_prompt_template
 import json
 from processors.factory import DocumentProcessorFactory
 from processors.mock import MockProcessor
@@ -136,7 +136,7 @@ class NewModel(LabelStudioMLBase):
             return match.group(1)
         return None
 
-    def doc_understanding(self, file_path, runtime_config: Optional[dict] = None):
+    def doc_understanding(self, file_path, runtime_config: Optional[dict] = None, formatted_prompt: Optional[str] = None):
         # 检查是否使用仿真数据 - 这个检查现在在processor内部处理
         if should_use_mock_data() and not isinstance(self.processor, MockProcessor):
             # 如果环境要求使用mock但当前不是mock processor，临时切换
@@ -145,7 +145,8 @@ class NewModel(LabelStudioMLBase):
             json_string = mock_processor.process_document(file_path, "")
         else:
             # 使用配置的processor
-            instruction = self.prompt if self.prompt else prompt
+            # 优先使用格式化后的prompt，然后是self.prompt，最后是默认prompt
+            instruction = formatted_prompt if formatted_prompt else (self.prompt if self.prompt else prompt)
             # 传递runtime_config给processor
             if hasattr(self.processor, 'process_document'):
                 # 检查processor是否支持runtime_config参数
@@ -159,7 +160,7 @@ class NewModel(LabelStudioMLBase):
                         logger.warning(f'Processor {type(self.processor).__name__} does not support runtime_config, ignoring: {runtime_config}')
             else:
                 json_string = self.processor.process_document(file_path, instruction)
-        
+
         text = self._post_process_ret(json_string, file_path)
         return text 
                  
@@ -205,34 +206,43 @@ class NewModel(LabelStudioMLBase):
             'HyperText'
         )
         print(f'get_first_tag_occurence: {from_name}, {to_name}, {value}')
-        
+
         # 提取src属性的值
         embed_html = task['data'][value]
         url = self.extract_src_from_embed(embed_html)
         print(f'extracted src: {url} from: {embed_html} ')
-        
+
         if not url:
             print('Could not extract src from embed tag')
             return PredictionValue(result=[])
-        
+
         # you need to set env vars LABEL_STUDIO_URL and LABEL_STUDIO_API_KEY
         filepath = self.get_local_path(url, task_id=task['id'])
         print(f'Local path: {filepath}')
-        
-        text = self.doc_understanding(filepath, runtime_config)
-        
+
+        # 格式化prompt模板，使用task['data']中的值替换占位符
+        formatted_prompt = None
+        if self.prompt:
+            task_data = task.get('data', {})
+            formatted_prompt = format_prompt_template(self.prompt, task_data)
+            print(f'Formatted prompt: {formatted_prompt}')
+            if formatted_prompt != self.prompt:
+                print(f'Original prompt: {self.prompt}')
+
+        text = self.doc_understanding(filepath, runtime_config, formatted_prompt)
+
         result = {
             "id": str(uuid4())[:8],
             "from_name": from_name,
             "to_name": to_name,
             "type": "textarea",
             'origin': 'manual',
-            "value":  { 
+            "value":  {
                 "text": [
                     text
                 ]
             }}
-        
+
         return PredictionValue(result=[result], score=0.9, model_version=str(self.model_version))
     
     def predict(self, tasks: List[Dict], context: Optional[Dict] = None, **kwargs) -> ModelResponse:
@@ -251,7 +261,7 @@ class NewModel(LabelStudioMLBase):
         self.prompt = kwargs.get('prompt') if kwargs else None
         runtime_config = kwargs.get('runtime_config') if kwargs else None
         model_version = kwargs.get('model_version') if kwargs else None
-        
+
         print(f"Received prompt: {self.prompt}")
         print(f"Received runtime_config: {runtime_config}")
         print(f"Received model_version: {model_version}")

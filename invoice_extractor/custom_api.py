@@ -20,8 +20,19 @@ def init_app_with_custom_endpoints(model_class, **kwargs):
     Returns:
         Flask应用实例
     """
+    # 强制设置正确的日志级别，确保业务日志能正常显示
+    import logging
+    import os
+    final_log_level = os.getenv('LOG_LEVEL', 'INFO')
+    logging.getLogger().setLevel(getattr(logging, final_log_level.upper()))
+    logger.info(f"APP INIT: Final log level set to: {final_log_level}")
+
     # 使用标准的init_app创建基础应用
     app = base_init_app(model_class, **kwargs)
+
+    # 再次确认日志级别（Flask可能会重置）
+    logging.getLogger().setLevel(getattr(logging, final_log_level.upper()))
+    logger.info(f"APP INIT: After Flask init, log level confirmed: {final_log_level}")
 
     # 添加自定义端点
     add_custom_endpoints(app, model_class)

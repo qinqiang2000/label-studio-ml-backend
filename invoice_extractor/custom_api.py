@@ -48,7 +48,7 @@ def init_app_with_custom_endpoints(model_class, **kwargs):
         handler = logging.StreamHandler(sys.stdout)
         handler.setLevel(getattr(logging, final_log_level.upper()))
         formatter = logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            "%(asctime)s [%(levelname)s] %(name)s:%(filename)s:%(lineno)d: %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S"
         )
         handler.setFormatter(formatter)

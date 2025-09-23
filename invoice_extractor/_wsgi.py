@@ -12,7 +12,7 @@ logging.config.dictConfig({
   "disable_existing_loggers": False,  # Prevent overriding existing loggers
   "formatters": {
     "standard": {
-      "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+      "format": "%(asctime)s [%(levelname)s] %(name)s:%(filename)s:%(lineno)d: %(message)s",
       "datefmt": "%Y-%m-%d %H:%M:%S"
     }
   },
@@ -53,7 +53,7 @@ logging.config.dictConfig({
 # 强制使用basicConfig作为后备方案
 logging.basicConfig(
     level=getattr(logging, log_level.upper()),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    format="%(asctime)s [%(levelname)s] %(name)s:%(filename)s:%(lineno)d: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     force=True,  # 强制重新配置
     stream=__import__('sys').stdout  # 确保输出到stdout而不是stderr

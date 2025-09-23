@@ -331,7 +331,8 @@ class OpenAIDocumentProcessor(DocumentProcessor):
             
             if not result:
                 raise RuntimeError("No response content received from OpenAI")
-            
+
+            logger.info(f"OpenAI response: {result}")
             logger.info(f"Successfully processed document with OpenAI, result length: {len(result)}")
             return result
             

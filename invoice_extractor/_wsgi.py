@@ -55,7 +55,8 @@ logging.basicConfig(
     level=getattr(logging, log_level.upper()),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
-    force=True  # 强制重新配置
+    force=True,  # 强制重新配置
+    stream=__import__('sys').stdout  # 确保输出到stdout而不是stderr
 )
 
 from custom_api import init_app_with_custom_endpoints

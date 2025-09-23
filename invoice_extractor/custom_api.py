@@ -41,6 +41,20 @@ def init_app_with_custom_endpoints(model_class, **kwargs):
         specific_logger = logging.getLogger(logger_name)
         specific_logger.setLevel(getattr(logging, final_log_level.upper()))
 
+    # 确保根logger有handler（如果没有的话）
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        import sys
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(getattr(logging, final_log_level.upper()))
+        formatter = logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
+        handler.setFormatter(formatter)
+        root_logger.addHandler(handler)
+        root_logger.setLevel(getattr(logging, final_log_level.upper()))
+
     logger.info(f"APP INIT: After Flask init, log level confirmed: {final_log_level}")
     logger.info(f"APP INIT: Flask app logger level: {app.logger.getEffectiveLevel()}")
 

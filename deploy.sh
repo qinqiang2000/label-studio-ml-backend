@@ -98,7 +98,7 @@ ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && docker build -t $DOCKER_I
 
 # 7. 运行新容器
 echo "🚀 启动新的Docker容器..."
-ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && docker run -d --name $CONTAINER_NAME -p $HOST_PORT:$CONTAINER_PORT --env-file .env $DOCKER_IMAGE"
+ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && nohup docker run --rm --name $CONTAINER_NAME -p $HOST_PORT:$CONTAINER_PORT --env-file .env $DOCKER_IMAGE > /var/log/invoice-extractor.log 2>&1 &"
 
 # 8. 等待服务启动并进行全面测试
 echo "⏳ 等待服务启动..."
@@ -168,9 +168,17 @@ fi
 
 # 容器健康检查
 echo "🐳 5. 容器状态检查"
-container_status=$(ssh $REMOTE_HOST "docker inspect --format='{{.State.Status}}' $CONTAINER_NAME")
+container_status=$(ssh $REMOTE_HOST "docker inspect --format='{{.State.Status}}' $CONTAINER_NAME 2>/dev/null || echo 'not_found'")
 if [ "$container_status" = "running" ]; then
     echo "  ✅ Docker容器运行状态正常"
+elif [ "$container_status" = "not_found" ]; then
+    echo "  ⚠️ 容器使用--rm模式，检查进程是否运行..."
+    if ssh $REMOTE_HOST "pgrep -f '$CONTAINER_NAME' >/dev/null 2>&1"; then
+        echo "  ✅ 容器进程运行正常"
+    else
+        echo "  ❌ 容器进程未找到"
+        test_failed=1
+    fi
 else
     echo "  ❌ Docker容器状态异常: $container_status"
     test_failed=1
@@ -204,10 +212,10 @@ if [ $test_failed -eq 0 ]; then
     # 显示容器日志的最后几行
     echo ""
     echo "📋 最新容器日志："
-    ssh $REMOTE_HOST "docker logs $CONTAINER_NAME --tail 5"
+    ssh $REMOTE_HOST "tail -5 /var/log/invoice-extractor.log 2>/dev/null || echo '日志文件暂不可用'"
 else
     echo "❌ 部署测试失败！发现 $test_failed 个问题"
     echo "📋 完整容器日志："
-    ssh $REMOTE_HOST "docker logs $CONTAINER_NAME"
+    ssh $REMOTE_HOST "cat /var/log/invoice-extractor.log 2>/dev/null || echo '日志文件不存在'"
     exit 1
 fi

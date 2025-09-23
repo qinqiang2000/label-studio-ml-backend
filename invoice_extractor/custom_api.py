@@ -48,7 +48,7 @@ def init_app_with_custom_endpoints(model_class, **kwargs):
         handler = logging.StreamHandler(sys.stdout)
         handler.setLevel(getattr(logging, final_log_level.upper()))
         formatter = logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s:%(filename)s:%(lineno)d: %(message)s",
+            "%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d: %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S"
         )
         handler.setFormatter(formatter)
@@ -196,14 +196,18 @@ def add_custom_endpoints(app, model_class):
         root_logger.setLevel(current_level)
 
         try:
-            # 获取最新commit信息
-            commit_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd='/app').decode('utf-8').strip()
-            commit_date = subprocess.check_output(['git', 'show', '-s', '--format=%ci', 'HEAD'], cwd='/app').decode('utf-8').strip()
-            commit_message = subprocess.check_output(['git', 'show', '-s', '--format=%s', 'HEAD'], cwd='/app').decode('utf-8').strip()
+            # 从环境变量获取git信息（在Docker中通过deploy.sh传入）
+            import os
+            commit_hash = os.getenv('GIT_COMMIT_HASH', 'unknown')
+            commit_date = os.getenv('GIT_COMMIT_DATE', 'unknown')
+            commit_message = os.getenv('GIT_COMMIT_MESSAGE', 'unknown')
 
-            logger.info(f"Current commit: {commit_hash}")
-            logger.info(f"Commit date: {commit_date}")
-            logger.info(f"Commit message: {commit_message}")
+            if commit_hash != 'unknown':
+                logger.info(f"Current commit: {commit_hash}")
+                logger.info(f"Commit date: {commit_date}")
+                logger.info(f"Commit message: {commit_message}")
+            else:
+                logger.warning("Git info not available from environment variables")
 
         except Exception as git_error:
             logger.error(f"Failed to get git info: {git_error}")

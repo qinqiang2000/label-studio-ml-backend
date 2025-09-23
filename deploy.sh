@@ -106,11 +106,21 @@ fi
 echo "🔨 构建新的Docker镜像..."
 ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && docker build -t $DOCKER_IMAGE ."
 
-# 7. 运行新容器
-echo "🚀 启动新的Docker容器..."
-ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && nohup docker run --rm --name $CONTAINER_NAME -p $HOST_PORT:$CONTAINER_PORT --env-file .env -e LOG_LEVEL=INFO $DOCKER_IMAGE > /var/log/invoice-extractor.log 2>&1 &"
+# 7. 获取git信息用于传递给容器
+echo "📝 获取git信息..."
+COMMIT_HASH=$(ssh $REMOTE_HOST "cd $REMOTE_PATH && git rev-parse HEAD")
+COMMIT_DATE=$(ssh $REMOTE_HOST "cd $REMOTE_PATH && git show -s --format=%ci HEAD")
+COMMIT_MESSAGE=$(ssh $REMOTE_HOST "cd $REMOTE_PATH && git show -s --format=%s HEAD")
 
-# 验证容器启动
+echo "  📋 Commit: ${COMMIT_HASH:0:8}"
+echo "  📅 Date: $COMMIT_DATE"
+echo "  💬 Message: $COMMIT_MESSAGE"
+
+# 8. 运行新容器
+echo "🚀 启动新的Docker容器..."
+ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && nohup docker run --rm --name $CONTAINER_NAME -p $HOST_PORT:$CONTAINER_PORT --env-file .env -e LOG_LEVEL=INFO -e GIT_COMMIT_HASH='$COMMIT_HASH' -e GIT_COMMIT_DATE='$COMMIT_DATE' -e GIT_COMMIT_MESSAGE='$COMMIT_MESSAGE' $DOCKER_IMAGE > /var/log/invoice-extractor.log 2>&1 &"
+
+# 9. 验证容器启动
 echo "🔍 验证容器启动..."
 sleep 3
 startup_success=false
@@ -131,7 +141,7 @@ if [ "$startup_success" = false ]; then
     exit 1
 fi
 
-# 8. 等待服务完全就绪
+# 10. 等待服务完全就绪
 echo "⏳ 等待服务完全就绪..."
 sleep 7
 

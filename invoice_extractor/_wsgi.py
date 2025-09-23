@@ -120,6 +120,12 @@ if __name__ == "__main__":
         logger.info('Check "' + NewModel.__name__ + '" instance creation..')
         model = NewModel(**kwargs)
 
+    # 强制设置正确的日志级别，确保业务日志能正常显示
+    import logging
+    final_log_level = os.getenv('LOG_LEVEL', 'INFO')
+    logging.getLogger().setLevel(getattr(logging, final_log_level.upper()))
+    logger.info(f"Final log level set to: {final_log_level}")
+
     app = init_app_with_custom_endpoints(model_class=NewModel, basic_auth_user=args.basic_auth_user, basic_auth_pass=args.basic_auth_pass)
 
     app.run(host=args.host, port=args.port, debug=args.debug)

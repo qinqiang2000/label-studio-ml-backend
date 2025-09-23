@@ -47,4 +47,4 @@ COPY . .
 
 EXPOSE 9090
 
-CMD gunicorn --preload --bind 0.0.0.0:$PORT --workers $WORKERS --threads $THREADS --timeout 0 _wsgi:app
+CMD python start_with_custom_endpoints.py --host 0.0.0.0 --port $PORT

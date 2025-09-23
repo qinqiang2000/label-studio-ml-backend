@@ -47,4 +47,4 @@ COPY . .
 
 EXPOSE 9090
 
-CMD label-studio-ml start ./ --host 0.0.0.0 --port $PORT
+CMD gunicorn --preload --bind 0.0.0.0:$PORT --workers $WORKERS --threads $THREADS --timeout 0 _wsgi:app

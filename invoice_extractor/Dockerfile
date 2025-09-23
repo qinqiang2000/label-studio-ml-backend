@@ -1,7 +1,4 @@
-# syntax=docker/dockerfile:1
-ARG PYTHON_VERSION=3.12
-
-FROM python:${PYTHON_VERSION}-slim AS python-base
+FROM python:3.10-slim
 ARG TEST_ENV
 
 WORKDIR /app
@@ -11,7 +8,8 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=${PORT:-9090} \
     PIP_CACHE_DIR=/.cache \
     WORKERS=1 \
-    THREADS=8
+    THREADS=8 \
+    PYTHONPATH=/app
 
 # Update the base OS
 RUN --mount=type=cache,target="/var/cache/apt",sharing=locked \
@@ -27,6 +25,10 @@ RUN --mount=type=cache,target="/var/cache/apt",sharing=locked \
 COPY requirements-base.txt .
 RUN --mount=type=cache,target=${PIP_CACHE_DIR},sharing=locked \
     pip install -r requirements-base.txt
+
+# install label-studio-ml without dependency conflicts
+RUN --mount=type=cache,target=${PIP_CACHE_DIR},sharing=locked \
+    pip install --no-deps git+https://github.com/HumanSignal/label-studio-ml-backend.git
 
 # install custom requirements
 COPY requirements.txt .
@@ -45,4 +47,4 @@ COPY . .
 
 EXPOSE 9090
 
-CMD gunicorn --preload --bind :$PORT --workers $WORKERS --threads $THREADS --timeout 0 _wsgi:app
+CMD label-studio-ml start ./ --host 0.0.0.0 --port $PORT

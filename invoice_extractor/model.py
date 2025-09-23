@@ -248,12 +248,12 @@ class NewModel(LabelStudioMLBase):
             'TextArea',
             'HyperText'
         )
-        logger.debug(f'get_first_tag_occurence: {from_name}, {to_name}, {value}')
+        logger.info(f'get_first_tag_occurence: {from_name}, {to_name}, {value}')
 
         # 提取src属性的值
         embed_html = task['data'][value]
         url = self.extract_src_from_embed(embed_html)
-        logger.debug(f'extracted src: {url} from: {embed_html} ')
+        logger.info(f'extracted src: {url} from: {embed_html} ')
 
         if not url:
             logger.error('Could not extract src from embed tag')
@@ -261,7 +261,7 @@ class NewModel(LabelStudioMLBase):
 
         # you need to set env vars LABEL_STUDIO_URL and LABEL_STUDIO_API_KEY
         filepath = self.get_local_path(url, task_id=task['id'])
-        logger.debug(f'Local path: {filepath}')
+        logger.info(f'Local path: {filepath}')
 
         # 格式化prompt模板，使用task['data']中的值替换占位符
         formatted_prompt = None
@@ -360,7 +360,7 @@ class NewModel(LabelStudioMLBase):
         
         # 创建ModelResponse对象，用于统一管理预测结果和错误信息
         model_response = ModelResponse(predictions=[], model_version=str(self.model_version))
-        logger.debug(f"MODEL: Created ModelResponse with version: {self.model_version}")
+        logger.info(f"MODEL: Created ModelResponse with version: {self.model_version}")
         
         for i, task in enumerate(tasks):
             try:
@@ -399,7 +399,7 @@ class NewModel(LabelStudioMLBase):
                     
                     # 将错误信息添加到响应中
                     self._safe_add_error(model_response, i, task_id, error_str, error_type)
-                    logger.debug(f"MODEL: Added error to response - type: {error_type}, task_id: {task_id}")
+                    logger.info(f"MODEL: Added error to response - type: {error_type}, task_id: {task_id}")
                     
                 except Exception as log_error:
                     # 如果连异常处理都失败了，至少要记录基本信息
@@ -417,7 +417,7 @@ class NewModel(LabelStudioMLBase):
         
         # 设置预测结果
         model_response.predictions = predictions
-        logger.debug(f"MODEL: Set predictions to response, count: {len(predictions)}")
+        logger.info(f"MODEL: Set predictions to response, count: {len(predictions)}")
         
         # 记录处理结果统计
         total_tasks = len(tasks)

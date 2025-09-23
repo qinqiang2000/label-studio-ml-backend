@@ -148,12 +148,14 @@ def add_custom_endpoints(app, model_class):
         # 临时设置为DEBUG级别测试
         root_logger.setLevel(logging.INFO)
 
+        logger.error("BEFORE: Root logger level check")
         logger.info("=== /test endpoint called ===")
         logger.info("Testing different log levels:")
         logger.debug("This is a DEBUG message")
         logger.info("This is an INFO message")
         logger.warning("This is a WARNING message")
         logger.error("This is an ERROR message")
+        logger.error("AFTER: All log messages sent")
 
         # 恢复原来的级别
         root_logger.setLevel(current_level)

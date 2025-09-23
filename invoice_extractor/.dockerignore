@@ -14,5 +14,15 @@
 # Include script
 !*.sh
 
+# Include necessary directories
+!processors/
+!processors/**
+!analyzers/
+!analyzers/**
+!config/
+!config/**
+!tests/
+!tests/**
+
 # Exclude specific requirements if necessary
 # requirements-test.txt (Uncomment if you decide to exclude this)

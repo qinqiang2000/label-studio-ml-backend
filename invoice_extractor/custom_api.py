@@ -128,12 +128,24 @@ def add_custom_endpoints(app, model_class):
         import subprocess
         import datetime
 
+        # 强制设置日志级别为确保我们的日志能显示
+        import logging
+        root_logger = logging.getLogger()
+        current_level = root_logger.getEffectiveLevel()
+        logger.error(f"Current root logger level: {current_level} ({logging.getLevelName(current_level)})")
+
+        # 临时设置为DEBUG级别测试
+        root_logger.setLevel(logging.INFO)
+
         logger.info("=== /test endpoint called ===")
         logger.info("Testing different log levels:")
         logger.debug("This is a DEBUG message")
         logger.info("This is an INFO message")
         logger.warning("This is a WARNING message")
         logger.error("This is an ERROR message")
+
+        # 恢复原来的级别
+        root_logger.setLevel(current_level)
 
         try:
             # 获取最新commit信息

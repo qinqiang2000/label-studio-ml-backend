@@ -223,7 +223,7 @@ class GeminiProcessor(DocumentProcessor):
             contents=contents,
             config=generate_content_config,
         )
-        print(response.text)
+        logger.debug(f"Gemini response: {response.text}")
         
         # extract_json returns a list of JSON strings, so we take the first element
         json_string = response.text

@@ -34,7 +34,7 @@ LABEL_STUDIO_ACCESS_TOKEN = os.environ.get("LABEL_STUDIO_ACCESS_TOKEN")
 LABEL_STUDIO_HOST = os.environ.get("LABEL_STUDIO_URL")
 
 if os.environ.get('USING_PROXY', '').upper() == 'TRUE':
-    print("使用Proxy！")
+    logger.info("使用Proxy！")
     os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'
     os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
     os.environ['ALL_PROXY'] = 'socks5://127.0.0.1:7891'
@@ -248,29 +248,29 @@ class NewModel(LabelStudioMLBase):
             'TextArea',
             'HyperText'
         )
-        print(f'get_first_tag_occurence: {from_name}, {to_name}, {value}')
+        logger.debug(f'get_first_tag_occurence: {from_name}, {to_name}, {value}')
 
         # 提取src属性的值
         embed_html = task['data'][value]
         url = self.extract_src_from_embed(embed_html)
-        print(f'extracted src: {url} from: {embed_html} ')
+        logger.debug(f'extracted src: {url} from: {embed_html} ')
 
         if not url:
-            print('Could not extract src from embed tag')
+            logger.error('Could not extract src from embed tag')
             return PredictionValue(result=[])
 
         # you need to set env vars LABEL_STUDIO_URL and LABEL_STUDIO_API_KEY
         filepath = self.get_local_path(url, task_id=task['id'])
-        print(f'Local path: {filepath}')
+        logger.debug(f'Local path: {filepath}')
 
         # 格式化prompt模板，使用task['data']中的值替换占位符
         formatted_prompt = None
         if self.prompt:
             task_data = task.get('data', {})
             formatted_prompt = format_prompt_template(self.prompt, task_data)
-            print(f'Formatted prompt: {formatted_prompt}')
+            logger.debug(f'Formatted prompt: {formatted_prompt}')
             if formatted_prompt != self.prompt:
-                print(f'Original prompt: {self.prompt}')
+                logger.debug(f'Original prompt: {self.prompt}')
 
         text = self.doc_understanding(filepath, runtime_config, formatted_prompt)
 
@@ -305,9 +305,9 @@ class NewModel(LabelStudioMLBase):
         runtime_config = kwargs.get('runtime_config') if kwargs else None
         model_version = kwargs.get('model_version') if kwargs else None
 
-        print(f"Received prompt: {self.prompt}")
-        print(f"Received runtime_config: {runtime_config}")
-        print(f"Received model_version: {model_version}")
+        logger.info(f"Received prompt: {self.prompt}")
+        logger.info(f"Received runtime_config: {runtime_config}")
+        logger.info(f"Received model_version: {model_version}")
         
         # 如果指定了model_version，切换处理器
         original_processor = None
@@ -327,13 +327,13 @@ class NewModel(LabelStudioMLBase):
                     self.processor = DocumentProcessorFactory.create_processor(processor_type, **processor_config)
                     self.set("model_version", self.processor.get_model_version())
                     logger.info(f"Switched to processor: {processor_type} with model: {model_name}")
-                    print(f"MODEL: Switched to {processor_type}|{model_name}")
+                    logger.info(f"MODEL: Switched to {processor_type}|{model_name}")
                 else:
                     logger.warning(f"Failed to parse model_version '{model_version}', using default processor")
                     
             except Exception as e:
                 logger.error(f"Failed to switch processor for model_version '{model_version}': {e}, using default")
-                print(f"MODEL: Error switching processor: {e}")
+                logger.error(f"MODEL: Error switching processor: {e}")
                 # 如果切换失败，恢复原始处理器
                 if original_processor:
                     self.processor = original_processor
@@ -360,17 +360,17 @@ class NewModel(LabelStudioMLBase):
         
         # 创建ModelResponse对象，用于统一管理预测结果和错误信息
         model_response = ModelResponse(predictions=[], model_version=str(self.model_version))
-        print(f"MODEL: Created ModelResponse with version: {self.model_version}")
+        logger.debug(f"MODEL: Created ModelResponse with version: {self.model_version}")
         
         for i, task in enumerate(tasks):
             try:
-                print(f"Processing task {i+1}/{len(tasks)}, task_id: {task.get('id', 'unknown')}")
+                logger.info(f"Processing task {i+1}/{len(tasks)}, task_id: {task.get('id', 'unknown')}")
                 prediction = self.predict_single(task, runtime_config)
                 if prediction:
                     predictions.append(prediction)
-                    print(f"Successfully processed task {i+1}/{len(tasks)}")
+                    logger.info(f"Successfully processed task {i+1}/{len(tasks)}")
                 else:
-                    print(f"Warning: Task {i+1}/{len(tasks)} returned empty prediction")
+                    logger.warning(f"Task {i+1}/{len(tasks)} returned empty prediction")
                     # 空预测也算作一种错误
                     self._safe_add_error(
                         model_response, i, task.get('id', 'unknown'),
@@ -381,7 +381,7 @@ class NewModel(LabelStudioMLBase):
                     task_id = task.get('id', 'unknown') if isinstance(task, dict) else 'unknown'
                     error_str = str(e) if e else 'Unknown error'
                     error_msg = f"Failed to process task {i+1}/{len(tasks)} (id: {task_id}): {error_str}"
-                    print(error_msg)
+                    logger.error(error_msg)
                     logger.error(error_msg, exc_info=True)
                     
                     # 判断错误类型
@@ -399,11 +399,11 @@ class NewModel(LabelStudioMLBase):
                     
                     # 将错误信息添加到响应中
                     self._safe_add_error(model_response, i, task_id, error_str, error_type)
-                    print(f"MODEL: Added error to response - type: {error_type}, task_id: {task_id}")
+                    logger.debug(f"MODEL: Added error to response - type: {error_type}, task_id: {task_id}")
                     
                 except Exception as log_error:
                     # 如果连异常处理都失败了，至少要记录基本信息
-                    print(f"Critical error: Failed to log error for task {i+1}/{len(tasks)}: {log_error}")
+                    logger.critical(f"Critical error: Failed to log error for task {i+1}/{len(tasks)}: {log_error}")
                     try:
                         self._safe_add_error(
                             model_response, i, 'error_in_error_handling',
@@ -411,30 +411,30 @@ class NewModel(LabelStudioMLBase):
                         )
                     except:
                         # 最后的保险措施
-                        print(f"Fatal error: Cannot even add error info for task {i+1}")
+                        logger.critical(f"Fatal error: Cannot even add error info for task {i+1}")
                 # 继续处理下一个task，不中断整个批处理
                 continue
         
         # 设置预测结果
         model_response.predictions = predictions
-        print(f"MODEL: Set predictions to response, count: {len(predictions)}")
+        logger.debug(f"MODEL: Set predictions to response, count: {len(predictions)}")
         
         # 记录处理结果统计
         total_tasks = len(tasks)
         successful_tasks = len(predictions)
         error_count = self._safe_get_error_count(model_response)
         
-        print(f"\nBatch processing completed:")
-        print(f"Total tasks: {total_tasks}")
-        print(f"Successful: {successful_tasks}")
-        print(f"Failed: {error_count}")
+        logger.info(f"Batch processing completed:")
+        logger.info(f"Total tasks: {total_tasks}")
+        logger.info(f"Successful: {successful_tasks}")
+        logger.info(f"Failed: {error_count}")
 
 
         if self._safe_has_errors(model_response):
-            print(f"Error details:")
+            logger.info(f"Error details:")
             errors = getattr(model_response, 'errors', [])
             for error in errors:
-                print(f"  - Task {error['task_index']+1} (id: {error['task_id']}): [{error['error_type']}] {error['error_message']}")
+                logger.info(f"  - Task {error['task_index']+1} (id: {error['task_id']}): [{error['error_type']}] {error['error_message']}")
         
         # 恢复原始处理器（如果进行了切换）
         if original_processor:
@@ -442,13 +442,13 @@ class NewModel(LabelStudioMLBase):
                 self.processor = original_processor
                 self.set("model_version", original_model_version)
                 logger.info("Restored original processor after prediction")
-                print("MODEL: Restored original processor")
+                logger.info("MODEL: Restored original processor")
             except Exception as e:
                 logger.error(f"Failed to restore original processor: {e}")
         
         # 返回包含预测结果和错误信息的响应
         error_count_for_log = self._safe_get_error_count(model_response)
-        print(f"MODEL: Returning response - predictions: {len(model_response.predictions)}, errors: {error_count_for_log}")
+        logger.info(f"MODEL: Returning response - predictions: {len(model_response.predictions)}, errors: {error_count_for_log}")
         return model_response
     
     def _parse_model_version(self, model_version: str) -> tuple:
@@ -642,16 +642,16 @@ class NewModel(LabelStudioMLBase):
         # use cache to retrieve the data from the previous fit() runs
         old_data = self.get('my_data')
         old_model_version = self.get('model_version')
-        print(f'Old data: {old_data}')
-        print(f'Old model version: {old_model_version}')
+        logger.debug(f'Old data: {old_data}')
+        logger.debug(f'Old model version: {old_model_version}')
 
         # store new data to the cache
         self.set('my_data', 'my_new_data_value')
         self.set('model_version', 'my_new_model_version')
-        print(f'New data: {self.get("my_data")}')
-        print(f'New model version: {self.get("model_version")}')
+        logger.debug(f'New data: {self.get("my_data")}')
+        logger.debug(f'New model version: {self.get("model_version")}')
 
-        print('fit() completed successfully.')
+        logger.info('fit() completed successfully.')
 
     def load_image(self, img_path_url, task_id):
         # cache_dir = os.path.join(self.MODEL_DIR, '.file-cache')

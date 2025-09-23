@@ -67,7 +67,9 @@ def get_mock_invoice_data():
                     time.sleep(1) # 模拟从文件读取的轻微延迟
                     return content
         except (IOError, json.JSONDecodeError) as e:
-            print(f"Error reading or parsing mock.json: {e}. Falling back to default data.")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error reading or parsing mock.json: {e}. Falling back to default data.")
             # 如果读取或解析失败，则使用默认数据
             pass # 继续执行并返回默认数据
 

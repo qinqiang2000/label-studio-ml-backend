@@ -12,7 +12,8 @@ logging.config.dictConfig({
   "disable_existing_loggers": False,  # Prevent overriding existing loggers
   "formatters": {
     "standard": {
-      "format": "[%(asctime)s] [%(levelname)s] [%(name)s::%(funcName)s::%(lineno)d] %(message)s"
+      "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+      "datefmt": "%Y-%m-%d %H:%M:%S"
     }
   },
   "handlers": {
@@ -116,7 +117,7 @@ if __name__ == "__main__":
         kwargs.update(parse_kwargs())
 
     if args.check:
-        print('Check "' + NewModel.__name__ + '" instance creation..')
+        logger.info('Check "' + NewModel.__name__ + '" instance creation..')
         model = NewModel(**kwargs)
 
     app = init_app_with_custom_endpoints(model_class=NewModel, basic_auth_user=args.basic_auth_user, basic_auth_pass=args.basic_auth_pass)

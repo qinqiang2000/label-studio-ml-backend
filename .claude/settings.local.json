@@ -10,7 +10,15 @@
       "Bash(git checkout:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(git restore:*)",
+      "Bash(docker build:*)",
+      "Bash(export:*)",
+      "Bash(chmod:*)",
+      "Bash(./deploy.sh)"
     ],
     "deny": []
   }

@@ -34,6 +34,10 @@ logging.config.dictConfig({
 
 from label_studio_ml.api import init_app
 from model import NewModel
+from flask import jsonify
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 _DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
@@ -118,8 +122,32 @@ if __name__ == "__main__":
 
     app = init_app(model_class=NewModel, basic_auth_user=args.basic_auth_user, basic_auth_pass=args.basic_auth_pass)
 
+    # Add custom versions endpoint
+    @app.route('/versions', methods=['GET'])
+    def custom_versions():
+        try:
+            model = NewModel()
+            versions_info = model.get_versions()
+            logger.info(f"Custom versions endpoint: Retrieved {len(versions_info.get('versions', []))} versions")
+            return jsonify(versions_info)
+        except Exception as e:
+            logger.error(f"Custom versions endpoint error: {str(e)}", exc_info=True)
+            return jsonify({'versions': [], 'current_version': {}, 'total_count': 0, 'error': str(e)}), 500
+
     app.run(host=args.host, port=args.port, debug=args.debug)
 
 else:
     # for uWSGI use
     app = init_app(model_class=NewModel)
+
+    # Add custom versions endpoint for production WSGI
+    @app.route('/versions', methods=['GET'])
+    def custom_versions():
+        try:
+            model = NewModel()
+            versions_info = model.get_versions()
+            logger.info(f"Custom versions endpoint: Retrieved {len(versions_info.get('versions', []))} versions")
+            return jsonify(versions_info)
+        except Exception as e:
+            logger.error(f"Custom versions endpoint error: {str(e)}", exc_info=True)
+            return jsonify({'versions': [], 'current_version': {}, 'total_count': 0, 'error': str(e)}), 500

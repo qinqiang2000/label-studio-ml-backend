@@ -71,9 +71,9 @@ echo "  🔍 检查并停止Docker容器..."
 ssh $REMOTE_HOST "docker stop $CONTAINER_NAME 2>/dev/null && echo '  ✅ 容器已停止' || echo '  ℹ️ 没有运行中的容器'"
 
 # 由于使用--rm，容器会自动删除，无需手动rm
-# 额外清理：杀死可能残留的nohup进程
+# 额外清理：杀死可能残留的nohup进程（简化版）
 echo "  🔍 清理相关进程..."
-ssh $REMOTE_HOST "timeout 5 pkill -f '$CONTAINER_NAME' 2>/dev/null && echo '  ✅ 进程已清理' || echo '  ℹ️ 没有相关进程'"
+echo "  ℹ️ 跳过进程清理（Docker stop已足够）"
 
 # 清理可能的旧日志文件锁
 echo "  🔍 清理日志文件锁..."

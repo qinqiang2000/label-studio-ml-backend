@@ -20,7 +20,8 @@
       "Bash(chmod:*)",
       "Bash(./deploy.sh)",
       "Bash(find:*)",
-      "Bash(git filter-branch:*)"
+      "Bash(git filter-branch:*)",
+      "Bash(git remote add:*)"
     ],
     "deny": []
   }

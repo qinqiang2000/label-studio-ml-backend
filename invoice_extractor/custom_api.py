@@ -170,28 +170,13 @@ def add_custom_endpoints(app, model_class):
         app_level = app.logger.getEffectiveLevel()
         custom_api_level = logging.getLogger('custom_api').getEffectiveLevel()
 
-        logger.error(f"Current root logger level: {current_level} ({logging.getLevelName(current_level)})")
-        logger.error(f"Flask app logger level: {app_level} ({logging.getLevelName(app_level)})")
-        logger.error(f"custom_api logger level: {custom_api_level} ({logging.getLevelName(custom_api_level)})")
-
-        # 获取所有handlers信息
-        logger.error(f"Root logger handlers: {[str(h) for h in root_logger.handlers]}")
-        logger.error(f"App logger handlers: {[str(h) for h in app.logger.handlers]}")
-
         # 临时设置为INFO级别测试
         root_logger.setLevel(logging.INFO)
         app.logger.setLevel(logging.INFO)
         logging.getLogger('custom_api').setLevel(logging.INFO)
 
-        logger.error("BEFORE: Root logger level check")
         logger.info("=== /test endpoint called ===")
-        logger.info("Testing different log levels:")
-        logger.debug("This is a DEBUG message")
-        logger.info("This is an INFO message")
-        logger.warning("This is a WARNING message")
-        logger.error("This is an ERROR message")
-        logger.error("AFTER: All log messages sent")
-
+        
         # 恢复原来的级别
         root_logger.setLevel(current_level)
 

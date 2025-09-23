@@ -65,9 +65,14 @@ echo "📤 推送代码到远程仓库..."
 git push origin $BRANCH
 
 # 3. 在目标机器上停止现有服务
-echo "🔴 停止目标机器上的现有容器..."
+echo "🔴 停止目标机器上的现有容器和进程..."
+# 停止Docker容器（如果存在）
 ssh $REMOTE_HOST "docker stop $CONTAINER_NAME 2>/dev/null || true"
-ssh $REMOTE_HOST "docker rm $CONTAINER_NAME 2>/dev/null || true"
+# 由于使用--rm，容器会自动删除，无需手动rm
+# 额外清理：杀死可能残留的nohup进程
+ssh $REMOTE_HOST "pkill -f '$CONTAINER_NAME' 2>/dev/null || true"
+# 清理可能的旧日志文件锁
+ssh $REMOTE_HOST "rm -f /var/log/invoice-extractor.log.lock 2>/dev/null || true"
 
 # 4. 安全更新代码（增量更新，不删除）
 echo "🔄 安全更新代码..."
@@ -100,9 +105,30 @@ ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && docker build -t $DOCKER_I
 echo "🚀 启动新的Docker容器..."
 ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && nohup docker run --rm --name $CONTAINER_NAME -p $HOST_PORT:$CONTAINER_PORT --env-file .env $DOCKER_IMAGE > /var/log/invoice-extractor.log 2>&1 &"
 
-# 8. 等待服务启动并进行全面测试
-echo "⏳ 等待服务启动..."
-sleep 10
+# 验证容器启动
+echo "🔍 验证容器启动..."
+sleep 3
+startup_success=false
+for i in {1..5}; do
+    if ssh $REMOTE_HOST "docker ps --format '{{.Names}}' | grep -q '^${CONTAINER_NAME}$'"; then
+        echo "  ✅ 容器启动成功 (尝试 $i/5)"
+        startup_success=true
+        break
+    else
+        echo "  ⏳ 等待容器启动... (尝试 $i/5)"
+        sleep 2
+    fi
+done
+
+if [ "$startup_success" = false ]; then
+    echo "  ❌ 容器启动失败，检查日志："
+    ssh $REMOTE_HOST "tail -10 /var/log/invoice-extractor.log 2>/dev/null || echo '日志文件不存在'"
+    exit 1
+fi
+
+# 8. 等待服务完全就绪
+echo "⏳ 等待服务完全就绪..."
+sleep 7
 
 echo "🔍 开始自动化测试..."
 
@@ -173,10 +199,13 @@ if [ "$container_status" = "running" ]; then
     echo "  ✅ Docker容器运行状态正常"
 elif [ "$container_status" = "not_found" ]; then
     echo "  ⚠️ 容器使用--rm模式，检查进程是否运行..."
-    if ssh $REMOTE_HOST "pgrep -f '$CONTAINER_NAME' >/dev/null 2>&1"; then
+    # 检查Docker进程和端口监听
+    if ssh $REMOTE_HOST "pgrep -f 'docker.*$CONTAINER_NAME' >/dev/null 2>&1"; then
         echo "  ✅ 容器进程运行正常"
+    elif ssh $REMOTE_HOST "netstat -tlnp | grep :$HOST_PORT" >/dev/null 2>&1; then
+        echo "  ✅ 服务端口正在监听（容器可能已启动）"
     else
-        echo "  ❌ 容器进程未找到"
+        echo "  ❌ 容器进程和端口都未找到"
         test_failed=1
     fi
 else

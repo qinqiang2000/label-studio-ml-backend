@@ -18,7 +18,8 @@
       "Bash(docker build:*)",
       "Bash(export:*)",
       "Bash(chmod:*)",
-      "Bash(./deploy.sh)"
+      "Bash(./deploy.sh)",
+      "Bash(find:*)"
     ],
     "deny": []
   }

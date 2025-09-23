@@ -44,6 +44,49 @@ class NewModel(LabelStudioMLBase):
     MODEL_DIR = os.environ.get('MODEL_DIR', '.')
     """Custom ML Backend model with pluggable document processors"""
 
+    def _safe_add_error(self, model_response, task_index: int, task_id: str, error_message: str, error_type: str = "processing_error"):
+        """
+        Safely add error to model response with version compatibility
+        """
+        if hasattr(model_response, 'add_error'):
+            try:
+                model_response.add_error(
+                    task_index=task_index,
+                    task_id=task_id,
+                    error_message=error_message,
+                    error_type=error_type
+                )
+            except Exception as e:
+                logger.warning(f"Failed to add error to model response: {e}")
+        else:
+            # Fallback for older versions - just log the error
+            logger.error(f"Task {task_index+1} (id: {task_id}) error [{error_type}]: {error_message}")
+
+    def _safe_has_errors(self, model_response) -> bool:
+        """
+        Safely check if model response has errors with version compatibility
+        """
+        if hasattr(model_response, 'has_errors'):
+            try:
+                return model_response.has_errors()
+            except Exception:
+                pass
+
+        # Fallback: check errors attribute directly
+        if hasattr(model_response, 'errors'):
+            return model_response.errors is not None and len(model_response.errors) > 0
+
+        return False
+
+    def _safe_get_error_count(self, model_response) -> int:
+        """
+        Safely get error count with version compatibility
+        """
+        if self._safe_has_errors(model_response):
+            errors = getattr(model_response, 'errors', [])
+            return len(errors) if errors else 0
+        return 0
+
     def setup(self):
         """Configure any parameters of your model here"""
         
@@ -329,11 +372,9 @@ class NewModel(LabelStudioMLBase):
                 else:
                     print(f"Warning: Task {i+1}/{len(tasks)} returned empty prediction")
                     # 空预测也算作一种错误
-                    model_response.add_error(
-                        task_index=i,
-                        task_id=task.get('id', 'unknown'),
-                        error_message="Model returned empty prediction",
-                        error_type="empty_prediction"
+                    self._safe_add_error(
+                        model_response, i, task.get('id', 'unknown'),
+                        "Model returned empty prediction", "empty_prediction"
                     )
             except Exception as e:
                 try:
@@ -357,23 +398,16 @@ class NewModel(LabelStudioMLBase):
                         error_type = "config_error"
                     
                     # 将错误信息添加到响应中
-                    model_response.add_error(
-                        task_index=i,
-                        task_id=task_id,
-                        error_message=error_str,
-                        error_type=error_type
-                    )
+                    self._safe_add_error(model_response, i, task_id, error_str, error_type)
                     print(f"MODEL: Added error to response - type: {error_type}, task_id: {task_id}")
                     
                 except Exception as log_error:
                     # 如果连异常处理都失败了，至少要记录基本信息
                     print(f"Critical error: Failed to log error for task {i+1}/{len(tasks)}: {log_error}")
                     try:
-                        model_response.add_error(
-                            task_index=i,
-                            task_id='error_in_error_handling',
-                            error_message=f'Logging failed: {log_error}',
-                            error_type="critical_error"
+                        self._safe_add_error(
+                            model_response, i, 'error_in_error_handling',
+                            f'Logging failed: {log_error}', "critical_error"
                         )
                     except:
                         # 最后的保险措施
@@ -388,17 +422,18 @@ class NewModel(LabelStudioMLBase):
         # 记录处理结果统计
         total_tasks = len(tasks)
         successful_tasks = len(predictions)
-        error_count = len(model_response.errors) if model_response.has_errors() else 0
+        error_count = self._safe_get_error_count(model_response)
         
         print(f"\nBatch processing completed:")
         print(f"Total tasks: {total_tasks}")
         print(f"Successful: {successful_tasks}")
         print(f"Failed: {error_count}")
 
-        
-        if model_response.has_errors():
+
+        if self._safe_has_errors(model_response):
             print(f"Error details:")
-            for error in model_response.errors:
+            errors = getattr(model_response, 'errors', [])
+            for error in errors:
                 print(f"  - Task {error['task_index']+1} (id: {error['task_id']}): [{error['error_type']}] {error['error_message']}")
         
         # 恢复原始处理器（如果进行了切换）
@@ -412,7 +447,8 @@ class NewModel(LabelStudioMLBase):
                 logger.error(f"Failed to restore original processor: {e}")
         
         # 返回包含预测结果和错误信息的响应
-        print(f"MODEL: Returning response - predictions: {len(model_response.predictions)}, errors: {len(model_response.errors) if model_response.has_errors() else 0}")
+        error_count_for_log = self._safe_get_error_count(model_response)
+        print(f"MODEL: Returning response - predictions: {len(model_response.predictions)}, errors: {error_count_for_log}")
         return model_response
     
     def _parse_model_version(self, model_version: str) -> tuple:

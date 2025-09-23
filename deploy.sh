@@ -108,7 +108,7 @@ ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && docker build -t $DOCKER_I
 
 # 7. 运行新容器
 echo "🚀 启动新的Docker容器..."
-ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && nohup docker run --rm --name $CONTAINER_NAME -p $HOST_PORT:$CONTAINER_PORT --env-file .env $DOCKER_IMAGE > /var/log/invoice-extractor.log 2>&1 &"
+ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && nohup docker run --rm --name $CONTAINER_NAME -p $HOST_PORT:$CONTAINER_PORT --env-file .env -e LOG_LEVEL=INFO $DOCKER_IMAGE > /var/log/invoice-extractor.log 2>&1 &"
 
 # 验证容器启动
 echo "🔍 验证容器启动..."

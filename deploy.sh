@@ -247,6 +247,14 @@ if [ $test_failed -eq 0 ]; then
     echo ""
     echo "📋 最新容器日志："
     ssh $REMOTE_HOST "tail -5 /var/log/invoice-extractor.log 2>/dev/null || echo '日志文件暂不可用'"
+    # 额外测试 /test 端点的日志输出
+    echo "🧪 测试日志输出功能..."
+    echo "📡 调用 /test 端点..."
+    curl -s "http://$REMOTE_HOST:$HOST_PORT/test" > /dev/null || echo "⚠️  /test 端点调用失败"
+
+    echo "📋 查看日志输出："
+    ssh $REMOTE_HOST "tail -15 /var/log/invoice-extractor.log 2>/dev/null | grep -E '(BEFORE|AFTER|=== /test|This is|Current root|commit_date)' || echo '未找到测试日志'"
+
 else
     echo "❌ 部署测试失败！发现 $test_failed 个问题"
     echo "📋 完整容器日志："

@@ -117,10 +117,71 @@ def add_custom_endpoints(app, model_class):
                 'error': str(e)
             }), 500
 
+    @app.route('/test', methods=['GET'])
+    def test_logging():
+        """
+        测试日志输出端点，包括显示最新commit信息
+
+        Returns:
+            JSON: 测试结果和commit信息
+        """
+        import subprocess
+        import datetime
+
+        logger.info("=== /test endpoint called ===")
+        logger.info("Testing different log levels:")
+        logger.debug("This is a DEBUG message")
+        logger.info("This is an INFO message")
+        logger.warning("This is a WARNING message")
+        logger.error("This is an ERROR message")
+
+        try:
+            # 获取最新commit信息
+            commit_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd='/app').decode('utf-8').strip()
+            commit_date = subprocess.check_output(['git', 'show', '-s', '--format=%ci', 'HEAD'], cwd='/app').decode('utf-8').strip()
+            commit_message = subprocess.check_output(['git', 'show', '-s', '--format=%s', 'HEAD'], cwd='/app').decode('utf-8').strip()
+
+            logger.info(f"Current commit: {commit_hash}")
+            logger.info(f"Commit date: {commit_date}")
+            logger.info(f"Commit message: {commit_message}")
+
+        except Exception as git_error:
+            logger.error(f"Failed to get git info: {git_error}")
+            commit_hash = "unknown"
+            commit_date = "unknown"
+            commit_message = "unknown"
+
+        # 测试模型相关日志
+        try:
+            logger.info("Testing model instantiation...")
+            model_instance = model_class()
+            logger.info(f"Model class: {model_class.__name__}")
+            logger.info(f"Model version: {getattr(model_instance, 'model_version', 'unknown')}")
+            logger.info("Model instantiation successful")
+
+        except Exception as model_error:
+            logger.error(f"Model instantiation failed: {model_error}")
+
+        current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        logger.info(f"Test completed at: {current_time}")
+        logger.info("=== /test endpoint finished ===")
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Logging test completed - check logs for output',
+            'timestamp': current_time,
+            'git_info': {
+                'commit_hash': commit_hash,
+                'commit_date': commit_date,
+                'commit_message': commit_message
+            },
+            'log_levels_tested': ['DEBUG', 'INFO', 'WARNING', 'ERROR']
+        })
+
     # 在这里可以继续添加更多自定义端点
     # 例如：
     # @app.route('/custom/endpoint', methods=['POST'])
     # def custom_endpoint():
     #     pass
 
-    logger.info("Custom endpoints added: /versions, /model/info, /health/detailed")
+    logger.info("Custom endpoints added: /versions, /model/info, /health/detailed, /test")

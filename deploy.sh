@@ -67,12 +67,17 @@ git push origin $BRANCH
 # 3. 在目标机器上停止现有服务
 echo "🔴 停止目标机器上的现有容器和进程..."
 # 停止Docker容器（如果存在）
-ssh $REMOTE_HOST "docker stop $CONTAINER_NAME 2>/dev/null || true"
+echo "  🔍 检查并停止Docker容器..."
+ssh $REMOTE_HOST "docker stop $CONTAINER_NAME 2>/dev/null && echo '  ✅ 容器已停止' || echo '  ℹ️ 没有运行中的容器'"
+
 # 由于使用--rm，容器会自动删除，无需手动rm
 # 额外清理：杀死可能残留的nohup进程
-ssh $REMOTE_HOST "pkill -f '$CONTAINER_NAME' 2>/dev/null || true"
+echo "  🔍 清理相关进程..."
+ssh $REMOTE_HOST "timeout 5 pkill -f '$CONTAINER_NAME' 2>/dev/null && echo '  ✅ 进程已清理' || echo '  ℹ️ 没有相关进程'"
+
 # 清理可能的旧日志文件锁
-ssh $REMOTE_HOST "rm -f /var/log/invoice-extractor.log.lock 2>/dev/null || true"
+echo "  🔍 清理日志文件锁..."
+ssh $REMOTE_HOST "rm -f /var/log/invoice-extractor.log.lock 2>/dev/null && echo '  ✅ 日志锁已清理' || echo '  ℹ️ 没有日志锁文件'"
 
 # 4. 安全更新代码（增量更新，不删除）
 echo "🔄 安全更新代码..."

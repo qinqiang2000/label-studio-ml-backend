@@ -30,8 +30,33 @@ logging.config.dictConfig({
       "console"
     ],
     "propagate": True
+  },
+  "loggers": {
+    "invoice_extractor": {
+      "level": log_level,
+      "handlers": ["console"],
+      "propagate": False
+    },
+    "custom_api": {
+      "level": log_level,
+      "handlers": ["console"],
+      "propagate": False
+    },
+    "model": {
+      "level": log_level,
+      "handlers": ["console"],
+      "propagate": False
+    }
   }
 })
+
+# 强制使用basicConfig作为后备方案
+logging.basicConfig(
+    level=getattr(logging, log_level.upper()),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    force=True  # 强制重新配置
+)
 
 from custom_api import init_app_with_custom_endpoints
 from model import NewModel

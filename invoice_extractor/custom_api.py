@@ -30,9 +30,19 @@ def init_app_with_custom_endpoints(model_class, **kwargs):
     # 使用标准的init_app创建基础应用
     app = base_init_app(model_class, **kwargs)
 
+    # 强制设置Flask应用的日志级别
+    app.logger.setLevel(getattr(logging, final_log_level.upper()))
+
     # 再次确认日志级别（Flask可能会重置）
     logging.getLogger().setLevel(getattr(logging, final_log_level.upper()))
+
+    # 为所有相关的logger设置级别
+    for logger_name in ['invoice_extractor', 'custom_api', 'model', '__main__']:
+        specific_logger = logging.getLogger(logger_name)
+        specific_logger.setLevel(getattr(logging, final_log_level.upper()))
+
     logger.info(f"APP INIT: After Flask init, log level confirmed: {final_log_level}")
+    logger.info(f"APP INIT: Flask app logger level: {app.logger.getEffectiveLevel()}")
 
     # 添加自定义端点
     add_custom_endpoints(app, model_class)
@@ -143,10 +153,21 @@ def add_custom_endpoints(app, model_class):
         import logging
         root_logger = logging.getLogger()
         current_level = root_logger.getEffectiveLevel()
-        logger.error(f"Current root logger level: {current_level} ({logging.getLevelName(current_level)})")
+        app_level = app.logger.getEffectiveLevel()
+        custom_api_level = logging.getLogger('custom_api').getEffectiveLevel()
 
-        # 临时设置为DEBUG级别测试
+        logger.error(f"Current root logger level: {current_level} ({logging.getLevelName(current_level)})")
+        logger.error(f"Flask app logger level: {app_level} ({logging.getLevelName(app_level)})")
+        logger.error(f"custom_api logger level: {custom_api_level} ({logging.getLevelName(custom_api_level)})")
+
+        # 获取所有handlers信息
+        logger.error(f"Root logger handlers: {[str(h) for h in root_logger.handlers]}")
+        logger.error(f"App logger handlers: {[str(h) for h in app.logger.handlers]}")
+
+        # 临时设置为INFO级别测试
         root_logger.setLevel(logging.INFO)
+        app.logger.setLevel(logging.INFO)
+        logging.getLogger('custom_api').setLevel(logging.INFO)
 
         logger.error("BEFORE: Root logger level check")
         logger.info("=== /test endpoint called ===")

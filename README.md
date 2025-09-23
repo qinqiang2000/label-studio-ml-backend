@@ -89,19 +89,39 @@ The Invoice Extractor is a specialized ML backend designed for extracting inform
 
 The `invoice_extractor` model uses environment variables for configuration. You can create a `.env` file in the `invoice_extractor/` directory to set these variables.
 
-**Example .env file:**
+**Example .env file (refer to `invoice_extractor/.env.example` for full configuration):**
 
+```bash
+# Label Studio Configuration
+LABEL_STUDIO_URL=http://127.0.0.1:8080
+LABEL_STUDIO_API_KEY=your_label_studio_api_key
+
+# Document Processor Selection
+DOCUMENT_PROCESSOR=piaozone  # Options: gemini, openai, piaozone, mock
+
+# Gemini Configuration
+API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.5-flash-preview-04-17
+
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4o-mini
+
+# PiaoZone Configuration
+PIAOZONE_CLIENT_ID=Q3V07mngUYcDOGeELsIS
+PIAOZONE_CLIENT_SECRET=your_secret
+PIAOZONE_API_URL=https://api-sit.piaozone.com/ai/knowledge/v1/chat/completions
+
+# Proxy Configuration (if needed)
+USING_PROXY=FALSE
+HTTP_PROXY=http://your-proxy:port
 ```
-OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
-# Add other necessary environment variables here, e.g., for Google Gemini or other LLMs
-GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
-```
 
-**Note:** Ensure you replace `"YOUR_OPENAI_API_KEY"` and `"YOUR_GEMINI_API_KEY"` with your actual API keys. Refer to `invoice_extractor/processors/` for specific processor configurations.
+**Note:** Copy `invoice_extractor/.env.example` to `invoice_extractor/.env` and update with your actual API keys and configuration values.
 
-## Running the Invoice Extractor
+## Local Development
 
-To start the Invoice Extractor ML backend without Docker (for example, for debugging purposes), use the following command from the `label-studio-ml-backend/` directory:
+To start the Invoice Extractor ML backend locally (for example, for debugging purposes), use the following command from the `label-studio-ml-backend/` directory:
 
 ```bash
 label-studio-ml start ./invoice_extractor
@@ -112,6 +132,63 @@ You can modify the port using the `-p` parameter:
 ```bash
 label-studio-ml start ./invoice_extractor -p 9091
 ```
+
+## Remote Deployment
+
+For production deployment to a remote server, use the automated deployment scripts:
+
+### 1. Automated Deployment with `deploy.sh`
+
+The `deploy.sh` script provides automated deployment with the following features:
+- Automatic code commit and push
+- Remote server deployment via SSH
+- Docker container management
+- Comprehensive health checks and testing
+
+```bash
+# Run automated deployment (from project root)
+./deploy.sh
+```
+
+**Prerequisites:**
+- SSH access to the target server configured in `deploy.sh`
+- Docker installed on the target server
+- Properly configured `.env` file in `invoice_extractor/` directory on the target server
+
+### 2. View Remote Logs with `logs.sh`
+
+Monitor the deployed service using the log viewing tool:
+
+```bash
+# View recent logs
+./logs.sh
+
+# Follow logs in real-time
+./logs.sh -f
+
+# View last 100 lines
+./logs.sh -t 100
+
+# Search for specific patterns
+./logs.sh -g "versions"
+
+# View error logs only
+./logs.sh -e
+
+# Save logs to file
+./logs.sh --save
+```
+
+### 3. Environment Configuration for Remote Deployment
+
+Ensure the following environment variables are properly set in the remote server's `invoice_extractor/.env` file (based on `invoice_extractor/.env.example`):
+
+- **API Keys**: Configure your AI service API keys (`API_KEY`, `OPENAI_API_KEY`, `PIAOZONE_CLIENT_SECRET`)
+- **Label Studio**: Set `LABEL_STUDIO_URL` and `LABEL_STUDIO_API_KEY` for your Label Studio instance
+- **Processor Selection**: Choose your document processor via `DOCUMENT_PROCESSOR`
+- **Network**: Configure proxy settings if needed (`USING_PROXY`, `HTTP_PROXY`)
+
+The deployment script automatically validates the presence of the `.env` file and builds a Docker container with the specified configuration.
 
 # (Advanced usage) Develop your model
 

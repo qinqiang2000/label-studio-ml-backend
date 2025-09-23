@@ -16,6 +16,32 @@ BRANCH="company-custom"
 
 echo "🚀 开始自动化部署流程..."
 
+# ========================= SSH 认证与登录说明 =========================
+# 本脚本默认直接使用 "ssh $REMOTE_HOST" 进行连接，不显式指定私钥（如 -i）。
+# 之所以无需输入密码，是因为本机已配置了可用的 SSH Key，且远端服务器的
+#   /root/.ssh/authorized_keys 中已存在对应的公钥，或已通过 ssh-agent/Keychain 缓存。
+#
+# 在其他机器上维护或运行本脚本时，如果无法无密码登录，请按以下方式处理：
+# 1) 推荐方式：将该机器的 SSH 公钥追加到目标机器 root 用户的 authorized_keys 中。
+#    - 本机生成/查看公钥：cat ~/.ssh/id_rsa.pub（或 id_ed25519.pub）
+#    - 将公钥内容追加到目标机：/root/.ssh/authorized_keys（需具备相应权限）
+#
+# 2) 使用私钥文件直接登录（历史初次登录方式如下）：
+#    原始命令示例：ssh -i ~/tools/pem/ty_sg01.pem root@129.226.88.226
+#    - 若临时验证连通性，可直接用上面的命令登录。
+#    - 若希望脚本也显式使用该私钥，可临时将 REMOTE_HOST 改为：
+#        REMOTE_HOST="-i ~/tools/pem/ty_sg01.pem root@129.226.88.226"
+#      然后脚本中的 "ssh $REMOTE_HOST" 会携带 -i 选项（仅临时方案，不建议长期这样写）。
+#
+# 3) 更优雅的方式：配置 ~/.ssh/config，便于免密与固定私钥登录，例如：
+#      Host ls-ml-backend
+#        HostName 129.226.88.226
+#        User root
+#        IdentityFile ~/tools/pem/ty_sg01.pem
+#    配置完成后，可将上方 REMOTE_HOST 设置为：REMOTE_HOST="ls-ml-backend"
+#    这样脚本依然使用 "ssh $REMOTE_HOST"，但会自动读取该主机配置与私钥。
+# ====================================================================
+
 # 1. 检查是否有未提交的更改
 echo "📋 检查本地代码状态..."
 if [[ -n $(git status --porcelain) ]]; then

@@ -6,46 +6,51 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Label Studio ML backend repository focused on document processing and analysis. The project's core functionality is:
 
-- **Invoice Extractor (Core)**: Located in `invoice_extractor/` - the main implementation for document processing using various AI models (Gemini, OpenAI)
-- **Core ML Backend Framework**: Located in `label_studio_ml/` - provides the base classes and infrastructure (peripheral)
-- **Examples**: Located in `label_studio_ml/examples/` - various pre-built ML backends for reference (can be ignored)
+- **Invoice Extractor (Core)**: Located in `invoice_extractor/` - the **ONLY actively maintained** implementation for document processing using various AI models (Gemini, OpenAI, Piaozone)
+- **Core ML Backend Framework**: Located in `label_studio_ml/` - provides the base classes and infrastructure (modified from upstream to add `/analyze` endpoint)
+- **Examples**: Located in `label_studio_ml/examples/` - legacy reference examples (NOT maintained, can be ignored)
 
-## Development Commands
+## Deployment & Operations
 
-### Installation & Setup
+### Production Deployment (Primary Method)
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Deploy to production server (129.226.88.226:9091)
+./deploy.sh
 
-# Install package in development mode
-pip install -e .
+# The script automatically:
+# - Commits and pushes code changes
+# - Stops old containers
+# - Pulls latest code on remote server
+# - Builds Docker image from project root (includes modified label_studio_ml)
+# - Starts container with proper logging
+# - Runs health checks on all endpoints
+```
 
-# Install invoice extractor dependencies
+**Important**: Always use `./deploy.sh` for deployment. Manual docker commands are NOT recommended as they may miss critical configurations.
+
+### Monitoring & Debugging
+```bash
+# View container logs (file-based, persisted)
+./logs.sh -f              # Real-time log following
+./logs.sh -t 100          # Show last 100 lines
+./logs.sh -e              # Show only errors
+./logs.sh -g 'pattern'    # Search for pattern
+./logs.sh --save          # Save logs to local file
+
+# Logs are written to: /var/log/invoice-extractor.log (on remote server)
+```
+
+### Local Development (Testing Only)
+```bash
+# Install dependencies for local testing
 pip install -r invoice_extractor/requirements.txt
-```
 
-### Running & Testing
-```bash
 # Run tests
-make test
-# or
-pytest tests
+pytest invoice_extractor/tests/
 
-# Start the main invoice extractor backend
-label-studio-ml start ./invoice_extractor --host 0.0.0.0 --port 9091 --debug
-
-# Create a new ML backend (if needed)
-label-studio-ml create my_backend_name
-```
-
-### Docker Commands
-```bash
-# Build and run with Docker (from invoice_extractor directory)
+# Local server (for development only, NOT for production)
 cd invoice_extractor
-docker-compose up
-
-# Force rebuild without cache
-docker compose build --no-cache
+python start_with_custom_endpoints.py --port 9090 --debug
 ```
 
 ## Architecture Overview
@@ -68,25 +73,26 @@ docker compose build --no-cache
 
 ### Invoice Extractor Architecture (Main Focus)
 
-The invoice extractor is the core implementation with advanced patterns:
+The invoice extractor is the **ONLY actively maintained** implementation with advanced patterns:
 
 1. **Processor Factory Pattern** (`invoice_extractor/processors/factory.py`):
-   - Creates different document processors (Gemini, OpenAI, Mock)
-   - Handles processor switching at runtime
-   - Manages model version strings in format "processor_type|model_name"
+   - Creates different document processors: **Gemini** (primary), **OpenAI**, **Piaozone** (invoice OCR), **Mock** (testing)
+   - Handles processor switching at runtime via `model_version` parameter
+   - Model version format: `"processor_type|model_name"` (e.g., `"gemini|gemini-2.5-flash"`)
 
 2. **Document Processor Interface** (`invoice_extractor/processors/base.py`):
    - Abstract base class for all document processors
-   - Defines `process_document()` and `get_model_version()` methods
+   - Key methods: `process_document()`, `get_model_version()`
+   - Supports runtime configuration (temperature, response_schema, etc.)
 
 3. **Configuration Management** (`invoice_extractor/config/`):
-   - Runtime configuration for AI models (temperature, response_schema, etc.)
-   - Model version validation and switching
-   - YAML-based configuration files
+   - `models.yaml`: Model definitions and defaults
+   - `manager.py`: Runtime config validation, IP whitelist, model switching
+   - Environment-based configuration for API keys
 
 4. **Analyzer Components** (`invoice_extractor/analyzers/`):
-   - Specialized analyzers for different document types (Excel, etc.)
-   - Delegates processing to appropriate processors
+   - **ExcelAnalyzer**: Gemini-powered Excel file analysis (converts to CSV, uploads to Gemini)
+   - Delegates processing to configured processors
 
 ### Key Patterns
 
@@ -96,54 +102,159 @@ The invoice extractor is the core implementation with advanced patterns:
 4. **Error Handling**: Comprehensive error categorization and reporting
 5. **Model Versioning**: Support for switching between different AI models at runtime
 
+## API Endpoints
+
+The service exposes the following endpoints (deployed at `http://129.226.88.226:9091`):
+
+### Standard Endpoints
+- `POST /predict` - Process documents for Label Studio annotations (main endpoint)
+- `POST /analyze` - Analyze Excel files with Gemini (returns markdown report)
+- `POST /setup` - Initialize model configuration
+- `POST /webhook` - Handle Label Studio webhook events
+- `GET /health` - Basic health check
+- `GET /metrics` - System metrics
+
+### Custom Endpoints (added in `custom_api.py`)
+- `GET /versions` - List all available model versions
+- `GET /model/info` - Get current model information
+- `GET /health/detailed` - Detailed health status
+- `GET /test` - Test logging and git info
+
+See `invoice_extractor/README_ANALYZE.md` for `/analyze` endpoint details.
+
 ## Working with the Codebase
 
-### Primary Development (Invoice Extractor)
+### Primary Development (Invoice Extractor ONLY)
 
-Focus on the `invoice_extractor/` directory for main development:
+**Focus exclusively on `invoice_extractor/` directory** - this is the only maintained code:
 
-1. **Main Model**: `invoice_extractor/model.py` - contains the `NewModel` class
-2. **Document Processors**: `invoice_extractor/processors/` - add new AI model integrations
-3. **Configuration**: `invoice_extractor/config/` - model and runtime configurations
-4. **Testing**: `invoice_extractor/tests/` - test files for the main implementation
+1. **Main Model**: `invoice_extractor/model.py` - `NewModel` class (inherits from `LabelStudioMLBase`)
+2. **Document Processors**: `invoice_extractor/processors/` - AI model integrations
+   - `gemini.py` - Google Gemini processor (primary)
+   - `openai.py` - OpenAI processor
+   - `piaozone.py` - Piaozone invoice OCR
+   - `mock.py` - Mock processor for testing
+3. **Configuration**: `invoice_extractor/config/` - YAML configs and manager
+4. **Analyzers**: `invoice_extractor/analyzers/` - Excel analysis with Gemini
+5. **API Extensions**: `invoice_extractor/custom_api.py` - Custom endpoint definitions
 
 ### Adding New Document Processors
 
 1. Create processor class inheriting from `DocumentProcessor` in `invoice_extractor/processors/`
-2. Register in `invoice_extractor/processors/factory.py`
-3. Add configuration in `invoice_extractor/config/models.yaml`
-4. Update version parsing logic in `invoice_extractor/model.py`
+2. Implement `process_document()` and `get_model_version()` methods
+3. Register in `invoice_extractor/processors/factory.py` (`PROCESSORS` dict and `get_available_processors()`)
+4. Add model configuration in `invoice_extractor/config/models.yaml`
+5. Deploy with `./deploy.sh` to update production
 
-### Environment Variables
+### Environment Variables (configured in `invoice_extractor/.env`)
 
-Key environment variables used across the project:
-- `LABEL_STUDIO_URL`: Label Studio instance URL
-- `LABEL_STUDIO_API_KEY`: API key for Label Studio access
-- `DOCUMENT_PROCESSOR`: Processor type (gemini, openai, mock)
-- `API_KEY`: API key for AI services
-- `USING_PROXY`: Enable proxy configuration
-- `MODEL_DIR`: Directory for model storage and caching
+**Required**:
+- `API_KEY` - Gemini API key (primary)
+- `LABEL_STUDIO_URL` - Label Studio instance URL
+- `LABEL_STUDIO_API_KEY` - API key for Label Studio access
+
+**Optional**:
+- `DOCUMENT_PROCESSOR` - Processor type: `gemini`|`openai`|`piaozone`|`mock` (default: gemini)
+- `GEMINI_MODEL` - Gemini model name (default: gemini-2.5-flash)
+- `ANALYSIS_MODEL` - Model for Excel analysis (default: gemini-2.5-flash)
+- `USING_PROXY` - Enable HTTP proxy (TRUE/FALSE)
+- `MODEL_DIR` - Model cache directory (default: current dir)
+- `LOG_LEVEL` - Logging level: DEBUG|INFO|WARNING|ERROR (default: INFO)
 
 ### Testing
 
-- Invoice extractor tests in `invoice_extractor/tests/` directory
-- Core framework tests in `tests/` directory
-- Use `pytest` for running tests
-- Mock processors available for testing without API calls
+```bash
+# Run tests locally
+pytest invoice_extractor/tests/
+
+# Specific test files
+pytest invoice_extractor/tests/test_api.py
+pytest invoice_extractor/tests/test_processor_integration.py
+
+# Mock processor available for testing without API calls
+DOCUMENT_PROCESSOR=mock pytest invoice_extractor/tests/
+```
 
 ## File Structure Notes
 
-- `/invoice_extractor/`: **Main project focus** - core document processing implementation
-- `/label_studio_ml/`: Framework infrastructure (peripheral)
-- `/label_studio_ml/examples/`: Reference examples (can be ignored)
-- `/tests/`: Unit tests for core framework
+```
+label-studio-ml-backend/
+├── invoice_extractor/          # ⭐ ONLY actively maintained code
+│   ├── model.py                # Main ML model (NewModel class)
+│   ├── processors/             # AI model processors (Gemini, OpenAI, Piaozone, Mock)
+│   ├── analyzers/              # Document analyzers (Excel, etc.)
+│   ├── config/                 # Configuration management
+│   ├── custom_api.py           # Custom endpoint definitions
+│   ├── _wsgi.py                # WSGI entry point with custom endpoints
+│   ├── start_with_custom_endpoints.py  # Standalone server script
+│   ├── tests/                  # Test files
+│   ├── .env                    # Environment variables (not in git)
+│   ├── Dockerfile              # Container definition
+│   └── README_ANALYZE.md       # /analyze endpoint documentation
+├── label_studio_ml/            # Modified framework (adds /analyze endpoint)
+│   ├── api.py                  # API endpoints (modified to add /analyze)
+│   ├── model.py                # Base class (LabelStudioMLBase)
+│   └── examples/               # ⚠️ NOT maintained, ignore
+├── deploy.sh                   # ⭐ Production deployment script
+├── logs.sh                     # ⭐ Log viewing tool
+└── CLAUDE.md                   # This file
+```
 
-## Development Tips
+## Development Tips & Important Notes
 
-1. **Primary Focus**: Work mainly in `invoice_extractor/` directory - this is the core implementation
-2. **Starting the Server**: Use `label-studio-ml start ./invoice_extractor --host 0.0.0.0 --port 9091 --debug`
-3. **Model Version Management**: Use format "processor_type|model_name" for runtime model switching
-4. **Error Handling**: Always use `ModelResponse` for consistent error reporting
-5. **Configuration**: Check both environment variables and config files for settings
-6. **Testing**: Use mock processors to test without external API dependencies
-7. **Examples**: The `label_studio_ml/examples/` directory can be ignored - it's just reference material
+1. **Deployment**: ALWAYS use `./deploy.sh` for production deployment
+   - Handles git operations, Docker build from project root, health checks
+   - Manual docker commands will break (missing label_studio_ml modifications)
+
+2. **Logging**: Use `./logs.sh -f` to monitor production logs in real-time
+   - Logs persisted to `/var/log/invoice-extractor.log` on remote server
+   - Container restart preserves logs (file-based, not docker logs)
+
+3. **Model Version Management**:
+   - Format: `"processor_type|model_name"` (e.g., `"gemini|gemini-2.5-flash"`)
+   - Switch models at runtime via `/predict` endpoint's `model_version` parameter
+   - List available versions: `GET /versions`
+
+4. **Error Handling**:
+   - Use `ModelResponse` class for all predictions
+   - Supports error categorization and per-task error tracking
+   - Errors returned in response alongside predictions
+
+5. **Configuration Priority**:
+   1. Runtime parameters (in API request)
+   2. Environment variables (in `.env`)
+   3. Config files (`config/models.yaml`)
+
+6. **IP Whitelist**:
+   - Configured in `config/models.yaml` under `security.ip_whitelist`
+   - Uses `check_ip_whitelist()` in `label_studio_ml/api.py`
+
+7. **Testing Without API Calls**:
+   - Set `DOCUMENT_PROCESSOR=mock` to use mock processor
+   - Useful for testing logic without consuming API quota
+
+8. **Docker Build Context**:
+   - Build from **project root** (not invoice_extractor/)
+   - Required to include modified `label_studio_ml/` module
+   - `deploy.sh` handles this automatically
+
+## Recent Critical Fixes
+
+1. **`/analyze` endpoint 404 fix** (commit 5721a26):
+   - Problem: Docker installed label-studio-ml from upstream GitHub (no /analyze)
+   - Solution: Modified Dockerfile to install from local modified version
+   - Deploy from project root to include label_studio_ml/
+
+2. **Log persistence**:
+   - Container logs redirect to `/var/log/invoice-extractor.log`
+   - Survives container restarts, accessible via `logs.sh`
+
+## Common Issues & Solutions
+
+| Issue | Solution |
+|-------|----------|
+| `/analyze` returns 404 | Rebuild with `./deploy.sh` (don't use manual docker build) |
+| Logs not showing | Check container started with nohup redirect (use `./deploy.sh`) |
+| Model version not switching | Check format: `"processor_type\|model_name"` |
+| IP blocked | Add IP to `config/models.yaml` security.ip_whitelist |
+| API quota exceeded | Switch to mock processor for testing |

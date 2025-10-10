@@ -102,9 +102,9 @@ if ! ssh $REMOTE_HOST "test -f $REMOTE_PATH/invoice_extractor/.env"; then
     exit 1
 fi
 
-# 6. 构建新的Docker镜像
+# 6. 构建新的Docker镜像（从项目根目录构建，以便访问 label_studio_ml）
 echo "🔨 构建新的Docker镜像..."
-ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && docker build -t $DOCKER_IMAGE ."
+ssh $REMOTE_HOST "cd $REMOTE_PATH && docker build -f invoice_extractor/Dockerfile -t $DOCKER_IMAGE ."
 
 # 7. 获取git信息用于传递给容器
 echo "📝 获取git信息..."
@@ -186,6 +186,7 @@ test_endpoint "/versions" "GET" "200" "版本信息端点" || test_failed=1
 echo "🔧 2. 标准端点测试"
 test_endpoint "/setup" "POST" "500" "模型设置端点（预期需要参数）" || test_failed=1
 test_endpoint "/metrics" "GET" "200" "系统指标端点" || test_failed=1
+test_endpoint "/analyze" "POST" "400" "分析端点（预期需要参数）" || test_failed=1
 
 # 自定义端点测试
 echo "🚀 3. 自定义端点测试"
@@ -250,7 +251,7 @@ if [ $test_failed -eq 0 ]; then
     echo "✅ 🎉 所有测试通过！部署成功！"
     echo "🔗 服务地址: http://$REMOTE_HOST:$HOST_PORT"
     echo "📝 可用端点:"
-    echo "   标准: /health, /setup, /predict, /train, /metrics"
+    echo "   标准: /health, /setup, /predict, /train, /metrics, /analyze"
     echo "   自定义: /versions, /model/info, /health/detailed"
 
     # 显示容器日志的最后几行

@@ -22,28 +22,36 @@ RUN --mount=type=cache,target="/var/cache/apt",sharing=locked \
     apt-get autoremove -y
 
 # install base requirements
-COPY requirements-base.txt .
+COPY invoice_extractor/requirements-base.txt .
 RUN --mount=type=cache,target=${PIP_CACHE_DIR},sharing=locked \
     pip install -r requirements-base.txt
 
-# install label-studio-ml without dependency conflicts
+# Copy the project root label_studio_ml module (modified version with /analyze endpoint)
+# Note: This requires building from project root with: docker build -f invoice_extractor/Dockerfile .
+COPY label_studio_ml /tmp/label_studio_ml
+COPY setup.py /tmp/setup.py
+COPY README.md /tmp/README.md
+COPY LICENSE /tmp/LICENSE
+COPY requirements.txt /tmp/requirements.txt
+
+# install label-studio-ml from local modified version
 RUN --mount=type=cache,target=${PIP_CACHE_DIR},sharing=locked \
-    pip install --no-deps git+https://github.com/HumanSignal/label-studio-ml-backend.git
+    cd /tmp && pip install --no-deps . && rm -rf /tmp/label_studio_ml /tmp/setup.py /tmp/README.md /tmp/LICENSE /tmp/requirements.txt
 
 # install custom requirements
-COPY requirements.txt .
+COPY invoice_extractor/requirements.txt .
 RUN --mount=type=cache,target=${PIP_CACHE_DIR},sharing=locked \
     pip install -r requirements.txt
 
 # install test requirements if needed
-COPY requirements-test.txt .
+COPY invoice_extractor/requirements-test.txt .
 # build only when TEST_ENV="true"
 RUN --mount=type=cache,target=${PIP_CACHE_DIR},sharing=locked \
     if [ "$TEST_ENV" = "true" ]; then \
       pip install -r requirements-test.txt; \
     fi
 
-COPY . .
+COPY invoice_extractor/ .
 
 EXPOSE 9090
 

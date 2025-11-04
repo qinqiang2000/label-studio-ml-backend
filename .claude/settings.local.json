@@ -24,7 +24,9 @@
       "Bash(git remote add:*)",
       "Bash(bash:*)",
       "Bash(./logs.sh:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(pkill:*)",
+      "Bash(timeout:*)"
     ],
     "deny": []
   }

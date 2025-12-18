@@ -30,8 +30,8 @@ processors:
         description: "Gemini-2.5-Flash(tested, recommended)"
         
       gemini-flash-latest:
-        name: "gemini-flash-latest"
-        description: "Points to gemini-2.5-flash-preview-09-2025"
+        name: "gemini-3-flash-preview"
+        description: "Points to gemini-3-flash-preview"
 
   # OpenAI 处理器  
   openai:

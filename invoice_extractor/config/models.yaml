@@ -29,7 +29,7 @@ processors:
         name: "gemini-2.5-flash"
         description: "Gemini-2.5-Flash(tested, recommended)"
         
-      gemini-flash-latest:
+      gemini-3-flash-preview:
         name: "gemini-3-flash-preview"
         description: "Points to gemini-3-flash-preview"
 

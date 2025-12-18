@@ -6,7 +6,8 @@
 set -e  # 遇到错误时退出
 
 # 配置变量
-REMOTE_HOST="root@129.226.88.226"
+REMOTE_HOST="-i ~/tools/pem/ty_sg01.pem root@129.226.88.226"
+REMOTE_HOSTNAME="129.226.88.226"  # 用于显示服务地址
 REMOTE_PATH="/root/qqin/label-studio-ml-backend"
 DOCKER_IMAGE="invoice-extractor:latest"
 CONTAINER_NAME="invoice-extractor-container"
@@ -249,7 +250,7 @@ echo ""
 echo "📋 测试摘要:"
 if [ $test_failed -eq 0 ]; then
     echo "✅ 🎉 所有测试通过！部署成功！"
-    echo "🔗 服务地址: http://$REMOTE_HOST:$HOST_PORT"
+    echo "🔗 服务地址: http://$REMOTE_HOSTNAME:$HOST_PORT"
     echo "📝 可用端点:"
     echo "   标准: /health, /setup, /predict, /train, /metrics, /analyze"
     echo "   自定义: /versions, /model/info, /health/detailed"
@@ -261,7 +262,7 @@ if [ $test_failed -eq 0 ]; then
     # 额外测试 /test 端点的日志输出
     echo "🧪 测试日志输出功能..."
     echo "📡 调用 /test 端点..."
-    curl -s "http://$REMOTE_HOST:$HOST_PORT/test" > /dev/null || echo "⚠️  /test 端点调用失败"
+    curl -s "http://$REMOTE_HOSTNAME:$HOST_PORT/test" > /dev/null || echo "⚠️  /test 端点调用失败"
 
     echo "📋 查看日志输出："
     ssh $REMOTE_HOST "tail -15 /var/log/invoice-extractor.log 2>/dev/null | grep -E '(BEFORE|AFTER|=== /test|This is|Current root|commit_date)' || echo '未找到测试日志'"

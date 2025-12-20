@@ -55,4 +55,4 @@ COPY invoice_extractor/ .
 
 EXPOSE 9090
 
-CMD python start_with_custom_endpoints.py --host 0.0.0.0 --port $PORT
+CMD gunicorn -w $WORKERS --threads $THREADS --timeout 300 --bind 0.0.0.0:$PORT _wsgi:app

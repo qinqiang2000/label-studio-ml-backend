@@ -26,7 +26,8 @@
       "Bash(./logs.sh:*)",
       "Bash(tee:*)",
       "Bash(pkill:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

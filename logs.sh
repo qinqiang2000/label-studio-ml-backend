@@ -2,7 +2,7 @@
 
 # 远程容器日志查看工具
 
-REMOTE_HOST="root@129.226.88.226"
+REMOTE_HOST="-i ~/tools/pem/ty_sg01.pem root@129.226.88.226"
 CONTAINER_NAME="invoice-extractor-container"
 
 show_help() {

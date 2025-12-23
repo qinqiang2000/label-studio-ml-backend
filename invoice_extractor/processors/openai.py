@@ -196,45 +196,49 @@ class OpenAIDocumentProcessor(DocumentProcessor):
             }
         }
     
-    def _prepare_message_content(self, filepath: str, prompt: str) -> list:
+    def _prepare_message_content(self, filepath: str, prompt: str) -> tuple:
         """
         Prepare message content for OpenAI API
-        
+
         Args:
             filepath: Path to file
             prompt: Processing prompt
-            
+
         Returns:
-            List of content items for the message
+            Tuple of (content_list, use_instructions_api)
+            - content_list: List of content items for the message
+            - use_instructions_api: Whether to use instructions-based API
         """
-        content = [{"type": "input_text", "text": prompt}]
-        
         if self._is_image_file(filepath):
             # Handle image files with base64 encoding
             base64_image = self._encode_image(filepath)
-            content.append({
-                "type": "input_image",
-                "image_url": f"data:image/jpeg;base64,{base64_image}"
-            })
+            content = [
+                {"type": "input_text", "text": prompt},
+                {
+                    "type": "input_image",
+                    "image_url": f"data:image/jpeg;base64,{base64_image}"
+                }
+            ]
+            return content, False
         else:
-            # For non-image files, we need to upload them first
+            # For non-image files (PDF, DOCX, etc.), use file upload with user_data purpose
             try:
                 with open(filepath, "rb") as file:
                     uploaded_file = self.client.files.create(
                         file=file,
-                        purpose="vision"  # This purpose works for document analysis too
+                        purpose="user_data"  # user_data supports PDF and other document formats
                     )
-                    content.append({
-                        "type": "input_image",  # Responses API uses input_image for files too
+                    content = [{
+                        "type": "input_file",
                         "file_id": uploaded_file.id
-                    })
+                    }]
                     # Store file_id for cleanup
                     self._uploaded_file_id = uploaded_file.id
+                    # For file uploads, use instructions-based API
+                    return content, True
             except Exception as e:
                 logger.error(f"Failed to upload file {filepath}: {e}")
                 raise
-        
-        return content
     
     def process_document(self, file_path: str, instruction: str, runtime_config: Optional[Dict] = None) -> str:
         """
@@ -265,34 +269,47 @@ class OpenAIDocumentProcessor(DocumentProcessor):
             temperature = runtime_config.get('temperature', 0.1) if runtime_config else 0.1
             max_tokens = runtime_config.get('max_output_tokens', 4096) if runtime_config else 4096
             response_schema = runtime_config.get('response_schema') if runtime_config else None
-            
+
             # Prepare message content
-            content = self._prepare_message_content(file_path, instruction)
-            
-            # Prepare API parameters
-            api_params = {
-                "model": self.model_name,
-                "input": [{
-                    "role": "user",
-                    "content": content
-                }],
-                "max_output_tokens": max_tokens
-            }
+            content, use_instructions_api = self._prepare_message_content(file_path, instruction)
+
+            # Prepare API parameters based on file type
+            if use_instructions_api:
+                # For PDF and other documents, use instructions-based API
+                api_params = {
+                    "model": self.model_name,
+                    "input": [{
+                        "role": "user",
+                        "content": content
+                    }],
+                    "instructions": instruction,
+                    "max_output_tokens": max_tokens
+                }
+            else:
+                # For images, use content-based API
+                api_params = {
+                    "model": self.model_name,
+                    "input": [{
+                        "role": "user",
+                        "content": content
+                    }],
+                    "max_output_tokens": max_tokens
+                }
 
             # Only add temperature if model supports it
             if self._supports_temperature():
                 api_params["temperature"] = temperature
             else:
                 logger.info(f"Skipping temperature parameter for model {self.model_name} (not supported)")
-            
+
             # Add response format for structured outputs
             response_format = self._create_response_format(response_schema)
             if response_format:
                 api_params["response_format"] = response_format
                 logger.info("Using structured outputs with response schema")
-            
-            logger.info(f"Calling OpenAI API with parameters: {api_params.keys()}")
-            
+
+            logger.info(f"Calling OpenAI API with parameters: {api_params.keys()}, use_instructions_api={use_instructions_api}")
+
             # Choose API based on whether we need structured outputs
             if response_format:
                 # Use chat.completions.create for structured outputs support
@@ -303,7 +320,7 @@ class OpenAIDocumentProcessor(DocumentProcessor):
                             "role": "user",
                             "content": input_item["content"]
                         })
-                
+
                 chat_params = {
                     "model": api_params["model"],
                     "messages": messages,
@@ -314,9 +331,9 @@ class OpenAIDocumentProcessor(DocumentProcessor):
                 # Only add temperature if model supports it
                 if self._supports_temperature():
                     chat_params["temperature"] = temperature
-                
+
                 response = self.client.chat.completions.create(**chat_params)
-                
+
                 # Convert chat completion response to responses-like format
                 class MockResponse:
                     def __init__(self, chat_response):
@@ -330,7 +347,7 @@ class OpenAIDocumentProcessor(DocumentProcessor):
                                 ]
                             })()
                         ]
-                
+
                 response = MockResponse(response)
             else:
                 # Use responses.create for regular processing

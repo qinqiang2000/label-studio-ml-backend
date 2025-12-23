@@ -54,6 +54,20 @@ class OpenAIDocumentProcessor(DocumentProcessor):
     def get_model_version(self) -> str:
         """Get current model version"""
         return f"openai|{self.model_name}"
+
+    def _supports_temperature(self) -> bool:
+        """
+        Check if current model supports temperature parameter
+
+        GPT-5 series models do not support temperature parameter.
+
+        Returns:
+            True if model supports temperature, False otherwise
+        """
+        # GPT-5 and later models don't support temperature
+        if 'gpt-5' in self.model_name.lower():
+            return False
+        return True
     
     def _encode_image(self, image_path: str) -> str:
         """
@@ -262,9 +276,14 @@ class OpenAIDocumentProcessor(DocumentProcessor):
                     "role": "user",
                     "content": content
                 }],
-                "temperature": temperature,
                 "max_output_tokens": max_tokens
             }
+
+            # Only add temperature if model supports it
+            if self._supports_temperature():
+                api_params["temperature"] = temperature
+            else:
+                logger.info(f"Skipping temperature parameter for model {self.model_name} (not supported)")
             
             # Add response format for structured outputs
             response_format = self._create_response_format(response_schema)
@@ -288,10 +307,13 @@ class OpenAIDocumentProcessor(DocumentProcessor):
                 chat_params = {
                     "model": api_params["model"],
                     "messages": messages,
-                    "temperature": api_params["temperature"],
                     "max_tokens": api_params["max_output_tokens"],
                     "response_format": response_format
                 }
+
+                # Only add temperature if model supports it
+                if self._supports_temperature():
+                    chat_params["temperature"] = temperature
                 
                 response = self.client.chat.completions.create(**chat_params)
                 

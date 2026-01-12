@@ -27,7 +27,8 @@
       "Bash(tee:*)",
       "Bash(pkill:*)",
       "Bash(timeout:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git stash:*)"
     ],
     "deny": []
   }

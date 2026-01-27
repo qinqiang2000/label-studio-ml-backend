@@ -1,6 +1,8 @@
 """
 自定义API扩展模块
 用于在标准label-studio-ml基础上添加自定义端点
+
+测试注释：验证自动重启策略部署流程 - 2026-01-27
 """
 import logging
 from flask import jsonify, request

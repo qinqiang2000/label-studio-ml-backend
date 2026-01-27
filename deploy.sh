@@ -71,10 +71,9 @@ echo "🔴 停止目标机器上的现有容器和进程..."
 echo "  🔍 检查并停止Docker容器..."
 ssh $REMOTE_HOST "docker stop $CONTAINER_NAME 2>/dev/null && echo '  ✅ 容器已停止' || echo '  ℹ️ 没有运行中的容器'"
 
-# 由于使用--rm，容器会自动删除，无需手动rm
-# 额外清理：杀死可能残留的nohup进程（简化版）
-echo "  🔍 清理相关进程..."
-echo "  ℹ️ 跳过进程清理（Docker stop已足够）"
+# 删除容器（因为使用--restart策略，不再使用--rm自动删除）
+echo "  🔍 删除旧容器..."
+ssh $REMOTE_HOST "docker rm $CONTAINER_NAME 2>/dev/null && echo '  ✅ 容器已删除' || echo '  ℹ️ 没有需要删除的容器'"
 
 # 清理可能的旧日志文件锁
 echo "  🔍 清理日志文件锁..."
@@ -117,9 +116,9 @@ echo "  📋 Commit: ${COMMIT_HASH:0:8}"
 echo "  📅 Date: $COMMIT_DATE"
 echo "  💬 Message: $COMMIT_MESSAGE"
 
-# 8. 运行新容器
-echo "🚀 启动新的Docker容器..."
-ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && nohup docker run --rm --name $CONTAINER_NAME -p $HOST_PORT:$CONTAINER_PORT --env-file .env -e LOG_LEVEL=INFO -e GIT_COMMIT_HASH='$COMMIT_HASH' -e GIT_COMMIT_DATE='$COMMIT_DATE' -e GIT_COMMIT_MESSAGE='$COMMIT_MESSAGE' $DOCKER_IMAGE > /var/log/invoice-extractor.log 2>&1 &"
+# 8. 运行新容器（with auto-restart support）
+echo "🚀 启动新的Docker容器（自动重启策略: unless-stopped）..."
+ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && nohup docker run --restart=unless-stopped --name $CONTAINER_NAME -p $HOST_PORT:$CONTAINER_PORT --env-file .env -e LOG_LEVEL=INFO -e GIT_COMMIT_HASH='$COMMIT_HASH' -e GIT_COMMIT_DATE='$COMMIT_DATE' -e GIT_COMMIT_MESSAGE='$COMMIT_MESSAGE' $DOCKER_IMAGE > /var/log/invoice-extractor.log 2>&1 &"
 
 # 9. 验证容器启动
 echo "🔍 验证容器启动..."

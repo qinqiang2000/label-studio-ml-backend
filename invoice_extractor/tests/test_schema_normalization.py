@@ -21,6 +21,7 @@ def test_gemini_normalizes_response_template_to_schema():
                 {
                     "articleName": "",
                     "quantity": "",
+                    "description": "",
                 }
             ]
         },
@@ -55,6 +56,7 @@ def test_gemini_normalizes_response_template_to_schema():
                             "properties": {
                                 "articleName": {"type": "string"},
                                 "quantity": {"type": "string"},
+                                "description": {"type": "string"},
                             },
                         },
                     }

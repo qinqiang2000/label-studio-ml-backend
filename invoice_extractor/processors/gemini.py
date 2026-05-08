@@ -135,9 +135,43 @@ class GeminiProcessor(DocumentProcessor):
         """
         标准化 JSON Schema 格式
         将大写的类型名称转换为小写，修复结构问题
+        兼容 Prompt 中保存的 JSON 输出模板，将其转换为 Gemini SDK 接受的 JSON Schema。
         """
+        schema_keywords = {
+            'type', 'properties', 'items', 'required', 'anyOf', 'oneOf', 'allOf',
+            'enum', 'description', 'nullable', 'format', 'minimum', 'maximum'
+        }
+
+        def infer_template_schema(value):
+            if isinstance(value, dict):
+                if any(key in schema_keywords for key in value.keys()):
+                    return self._normalize_schema(value)
+                return {
+                    'type': 'object',
+                    'properties': {
+                        key: infer_template_schema(item)
+                        for key, item in value.items()
+                    }
+                }
+            if isinstance(value, list):
+                item_template = value[0] if value else ''
+                return {
+                    'type': 'array',
+                    'items': infer_template_schema(item_template)
+                }
+            if isinstance(value, bool):
+                return {'type': 'boolean'}
+            if isinstance(value, int) and not isinstance(value, bool):
+                return {'type': 'integer'}
+            if isinstance(value, float):
+                return {'type': 'number'}
+            return {'type': 'string'}
+
         if not isinstance(schema, dict):
-            return schema
+            return infer_template_schema(schema)
+
+        if not any(key in schema_keywords for key in schema.keys()):
+            return infer_template_schema(schema)
         
         # 递归处理嵌套的 schema
         normalized = {}

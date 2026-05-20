@@ -65,18 +65,8 @@ fi
 echo "📤 推送代码到远程仓库..."
 git push origin $BRANCH
 
-# 3. 在目标机器上停止现有服务
-echo "🔴 停止目标机器上的现有容器和进程..."
-# 停止Docker容器（如果存在）
-echo "  🔍 检查并停止Docker容器..."
-ssh $REMOTE_HOST "docker stop $CONTAINER_NAME 2>/dev/null && echo '  ✅ 容器已停止' || echo '  ℹ️ 没有运行中的容器'"
-
-# 删除容器（因为使用--restart策略，不再使用--rm自动删除）
-echo "  🔍 删除旧容器..."
-ssh $REMOTE_HOST "docker rm $CONTAINER_NAME 2>/dev/null && echo '  ✅ 容器已删除' || echo '  ℹ️ 没有需要删除的容器'"
-
-# 清理可能的旧日志文件锁
-echo "  🔍 清理日志文件锁..."
+# 3. 清理可能的旧日志文件锁
+echo "🔍 清理日志文件锁..."
 ssh $REMOTE_HOST "rm -f /var/log/invoice-extractor.log.lock 2>/dev/null && echo '  ✅ 日志锁已清理' || echo '  ℹ️ 没有日志锁文件'"
 
 # 4. 安全更新代码（增量更新，不删除）
@@ -106,8 +96,8 @@ fi
 echo "🔨 构建新的Docker镜像..."
 ssh $REMOTE_HOST "cd $REMOTE_PATH && docker build -f invoice_extractor/Dockerfile -t $DOCKER_IMAGE ."
 
-# 7. 获取git信息用于传递给容器
-echo "📝 获取git信息..."
+# 7. 获取git信息并写入 .env（docker compose up -d 会自动重读）
+echo "📝 获取git信息并写入 .env..."
 COMMIT_HASH=$(ssh $REMOTE_HOST "cd $REMOTE_PATH && git rev-parse HEAD")
 COMMIT_DATE=$(ssh $REMOTE_HOST "cd $REMOTE_PATH && git show -s --format=%ci HEAD")
 COMMIT_MESSAGE=$(ssh $REMOTE_HOST "cd $REMOTE_PATH && git show -s --format=%s HEAD")
@@ -116,9 +106,17 @@ echo "  📋 Commit: ${COMMIT_HASH:0:8}"
 echo "  📅 Date: $COMMIT_DATE"
 echo "  💬 Message: $COMMIT_MESSAGE"
 
-# 8. 运行新容器（with auto-restart support）
-echo "🚀 启动新的Docker容器（自动重启策略: unless-stopped）..."
-ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && nohup docker run --restart=unless-stopped --name $CONTAINER_NAME -p $HOST_PORT:$CONTAINER_PORT --env-file .env -e LOG_LEVEL=INFO -e GIT_COMMIT_HASH='$COMMIT_HASH' -e GIT_COMMIT_DATE='$COMMIT_DATE' -e GIT_COMMIT_MESSAGE='$COMMIT_MESSAGE' $DOCKER_IMAGE > /var/log/invoice-extractor.log 2>&1 &"
+ssh $REMOTE_HOST "
+  cd $REMOTE_PATH/invoice_extractor
+  sed -i '/^GIT_COMMIT_HASH=/d;/^GIT_COMMIT_DATE=/d;/^GIT_COMMIT_MESSAGE=/d' .env
+  echo \"GIT_COMMIT_HASH=$COMMIT_HASH\" >> .env
+  echo \"GIT_COMMIT_DATE=$COMMIT_DATE\" >> .env
+  echo \"GIT_COMMIT_MESSAGE=$COMMIT_MESSAGE\" >> .env
+"
+
+# 8. 用 docker compose 启动（每次都重读 .env，无需手动 stop/rm）
+echo "🚀 启动容器（docker compose up -d）..."
+ssh $REMOTE_HOST "cd $REMOTE_PATH/invoice_extractor && docker compose up -d > /var/log/invoice-extractor.log 2>&1"
 
 # 9. 验证容器启动
 echo "🔍 验证容器启动..."

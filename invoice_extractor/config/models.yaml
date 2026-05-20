@@ -14,21 +14,25 @@ processors:
     name: "Google Gemini"
     description: "Google's Gemini AI models for document understanding"
     enabled: true
-    default_model: "gemini-2.5-flash"
-    
+    default_model: "gemini-3.5-flash"
+
     # 环境变量映射
     env_vars:
       api_key: "API_KEY"                    # Gemini API密钥
       model_override: "GEMINI_MODEL"        # 可通过环境变量覆盖默认模型
       temperature: "GEMINI_TEMPERATURE"     # 温度参数
       max_output_tokens: "GEMINI_MAX_OUTPUT_TOKENS"
-    
+
     # 支持的模型列表
     models:
+      gemini-3.5-flash:
+        name: "gemini-3.5-flash"
+        description: "Gemini-3.5-Flash (default)"
+
       gemini-2.5-flash:
         name: "gemini-2.5-flash"
         description: "Gemini-2.5-Flash(tested, recommended)"
-        
+
       gemini-3-flash-preview:
         name: "gemini-3-flash-preview"
         description: "Points to gemini-3-flash-preview"

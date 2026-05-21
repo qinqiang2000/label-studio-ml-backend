@@ -43,18 +43,18 @@ processors:
     name: "OpenAI"
     description: "OpenAI's GPT models for document understanding"
     enabled: true  # 可通过修改这里禁用整个处理器
-    default_model: "gpt-5-mini"
-    
+    default_model: "gpt-5.4-mini"
+
     # 环境变量映射
     env_vars:
       api_key: "OPENAI_API_KEY"           # OpenAI API密钥
       model_override: "OPENAI_MODEL"      # 可通过环境变量覆盖默认模型
-      
+
     # 支持的模型列表
     models:
-      gpt-5-mini:
-        name: "gpt-5-mini"
-        description: "OpenAI gpt-5-mini (fastest and cheapest)"
+      gpt-5.4-mini:
+        name: "gpt-5.4-mini"
+        description: "OpenAI gpt-5.4-mini (fastest and cheapest)"
         
       # gpt-4.1:
       #   name: "gpt-4.1"

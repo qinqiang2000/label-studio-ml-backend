@@ -289,7 +289,7 @@ class OpenAIDocumentProcessor(DocumentProcessor):
         try:
             # Get runtime configuration
             temperature = runtime_config.get('temperature', 0.1) if runtime_config else 0.1
-            max_tokens = runtime_config.get('max_output_tokens', 4096) if runtime_config else 4096
+            max_tokens = runtime_config.get('max_output_tokens', 200000) if runtime_config else 200000
             response_schema = runtime_config.get('response_schema') if runtime_config else None
 
             # Prepare message content

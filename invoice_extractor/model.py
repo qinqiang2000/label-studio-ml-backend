@@ -120,6 +120,9 @@ class NewModel(LabelStudioMLBase):
         elif any(k in low for k in ['region', 'location', 'country']) and ('not support' in low or 'unavailable' in low or '不支持' in low):
             error_type = "region_not_supported"
             summary = "API 地区限制（可能需要切换代理）"
+        elif 'invalid json received from model' in low or ('json' in low and ('decode' in low or 'invalid json' in low)):
+            error_type = "parse_error"
+            summary = "模型返回内容解析失败（非合法 JSON）"
         elif any(k in low for k in ['401', '403', 'unauthorized', 'forbidden', 'invalid api key', 'api_key', '鉴权', '密钥']):
             error_type = "authentication_error"
             summary = "API 鉴权失败（检查 API_KEY）"
@@ -133,7 +136,7 @@ class NewModel(LabelStudioMLBase):
         elif any(k in low for k in ['runtime_config', 'config error', 'invalid parameter']):
             error_type = "config_error"
             summary = "配置参数错误"
-        elif 'json' in low and ('decode' in low or 'parse' in low):
+        elif 'json' in low and ('decode' in low or 'parse' in low or 'invalid json' in low):
             error_type = "parse_error"
             summary = "模型返回内容解析失败（非合法 JSON）"
 
@@ -275,8 +278,14 @@ class NewModel(LabelStudioMLBase):
         try:
             text = json.loads(json_string)
         except json.JSONDecodeError as e:
-            logger.error(f'Failed to decode JSON from response: {json_string}, Error: {e}')
-            raise ValueError(f"Invalid JSON received from model: {json_string}") from e
+            # Retry after escaping unescaped control characters (e.g. literal \n inside string values)
+            try:
+                sanitized = json_string.replace('\r\n', '\\n').replace('\r', '\\n').replace('\n', '\\n').replace('\t', '\\t')
+                text = json.loads(sanitized)
+                logger.info("Parsed JSON after sanitizing unescaped control characters")
+            except json.JSONDecodeError:
+                logger.error(f'Failed to decode JSON from response: {json_string}, Error: {e}')
+                raise ValueError(f"Invalid JSON received from model: {json_string}") from e
 
         # Force page field to [1] for image files
         if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):

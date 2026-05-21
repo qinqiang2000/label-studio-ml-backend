@@ -313,12 +313,27 @@ class OpenAIDocumentProcessor(DocumentProcessor):
             # Choose API based on whether we need structured outputs
             if response_format:
                 # Use chat.completions.create for structured outputs support
+                # Convert Responses API content format to Chat Completions format
+                def _to_chat_content(items):
+                    result = []
+                    for item in items:
+                        t = item.get("type")
+                        if t == "input_text":
+                            result.append({"type": "text", "text": item["text"]})
+                        elif t == "input_image":
+                            result.append({"type": "image_url", "image_url": {"url": item["image_url"]}})
+                        elif t == "input_file":
+                            result.append({"type": "file", "file": {"file_id": item["file_id"]}})
+                        else:
+                            result.append(item)
+                    return result
+
                 messages = []
                 for input_item in api_params["input"]:
                     if input_item["role"] == "user":
                         messages.append({
                             "role": "user",
-                            "content": input_item["content"]
+                            "content": _to_chat_content(input_item["content"])
                         })
 
                 chat_params = {

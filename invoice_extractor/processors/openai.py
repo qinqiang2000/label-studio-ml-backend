@@ -339,7 +339,7 @@ class OpenAIDocumentProcessor(DocumentProcessor):
                 chat_params = {
                     "model": api_params["model"],
                     "messages": messages,
-                    "max_tokens": api_params["max_output_tokens"],
+                    "max_completion_tokens": api_params["max_output_tokens"],
                     "response_format": response_format
                 }
 

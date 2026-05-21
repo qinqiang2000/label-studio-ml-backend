@@ -60,6 +60,9 @@ def _predict():
     project_id = project.split('.', 1)[0] if project else None
     params = data.get('params', {})
     context = params.pop('context', {})
+    model_version = data.get('model_version')
+    if model_version:
+        params['model_version'] = model_version
 
     model = MODEL_CLASS(project_id=project_id,
                         label_config=label_config)

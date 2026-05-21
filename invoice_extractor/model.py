@@ -87,6 +87,64 @@ class NewModel(LabelStudioMLBase):
             return len(errors) if errors else 0
         return 0
 
+    def _summarize_error(self, exc):
+        """
+        将原始异常转成 (error_type, 可读消息)。
+
+        可读消息形如 "图片下载失败 [host]: SSL证书验证失败 | 原始: ..."，
+        既能在前端 toast 一眼看懂，也保留原始细节给排错用。
+        """
+        raw = str(exc) if exc else "Unknown error"
+        low = raw.lower()
+
+        error_type = "processing_error"
+        summary = None
+
+        host_match = re.search(r"host=['\"]([^'\"]+)['\"]", raw)
+        host = host_match.group(1) if host_match else None
+        url_match = re.search(r"https?://[^\s'\")]+", raw)
+        url = url_match.group(0) if url_match else None
+
+        if 'sslcertverificationerror' in low or 'certificate verify failed' in low:
+            error_type = "network_error"
+            summary = f"图片下载失败 [{host or '目标主机'}]: SSL 证书验证失败"
+        elif any(k in low for k in ['connection refused', 'connectionerror', 'max retries', 'name or service not known', 'failed to establish', 'newconnectionerror']):
+            error_type = "network_error"
+            summary = f"网络连接失败" + (f" [{host}]" if host else "")
+        elif any(k in low for k in ['network', '网络']):
+            error_type = "network_error"
+            summary = f"网络错误" + (f" [{host}]" if host else "")
+        elif any(k in low for k in ['timeout', '超时', 'timed out']):
+            error_type = "timeout_error"
+            summary = "请求超时"
+        elif any(k in low for k in ['region', 'location', 'country']) and ('not support' in low or 'unavailable' in low or '不支持' in low):
+            error_type = "region_not_supported"
+            summary = "API 地区限制（可能需要切换代理）"
+        elif any(k in low for k in ['401', '403', 'unauthorized', 'forbidden', 'invalid api key', 'api_key', '鉴权', '密钥']):
+            error_type = "authentication_error"
+            summary = "API 鉴权失败（检查 API_KEY）"
+        elif any(k in low for k in ['quota', '429', 'rate limit', 'resource_exhausted', '配额']):
+            error_type = "quota_exceeded"
+            summary = "API 配额或速率限制"
+        elif '404' in low or 'not found' in low:
+            error_type = "file_not_found"
+            local_match = re.search(r"/data/local-files/[^'\s)]+", raw)
+            summary = f"资源不存在 (404){' ' + local_match.group(0) if local_match else ''}"
+        elif any(k in low for k in ['runtime_config', 'config error', 'invalid parameter']):
+            error_type = "config_error"
+            summary = "配置参数错误"
+        elif 'json' in low and ('decode' in low or 'parse' in low):
+            error_type = "parse_error"
+            summary = "模型返回内容解析失败（非合法 JSON）"
+
+        if summary is None:
+            first_line = raw.split('\n', 1)[0].strip()
+            summary = first_line[:200] if first_line else "处理失败"
+
+        raw_truncated = raw if len(raw) <= 400 else raw[:400] + '...'
+        full_message = f"{summary} | 原始: {raw_truncated}" if summary != raw_truncated else summary
+        return error_type, full_message
+
     def setup(self):
         """Configure any parameters of your model here"""
         
@@ -383,22 +441,10 @@ class NewModel(LabelStudioMLBase):
                     error_msg = f"Failed to process task {i+1}/{len(tasks)} (id: {task_id}): {error_str}"
                     logger.error(error_msg)
                     logger.error(error_msg, exc_info=True)
-                    
-                    # 判断错误类型
-                    error_type = "processing_error"
-                    if any(keyword in error_str.lower() for keyword in ['timeout', '超时', 'timed out']):
-                        error_type = "timeout_error"
-                    elif any(keyword in error_str.lower() for keyword in ['region', '地区', 'location', 'country']):
-                        error_type = "region_not_supported"
-                    elif any(keyword in error_str.lower() for keyword in ['api', 'key', '密钥', 'auth']):
-                        error_type = "authentication_error"
-                    elif any(keyword in error_str.lower() for keyword in ['network', '网络', 'connection']):
-                        error_type = "network_error"
-                    elif any(keyword in error_str.lower() for keyword in ['runtime_config', 'config', 'parameter']):
-                        error_type = "config_error"
-                    
-                    # 将错误信息添加到响应中
-                    self._safe_add_error(model_response, i, task_id, error_str, error_type)
+
+                    error_type, friendly_message = self._summarize_error(e)
+
+                    self._safe_add_error(model_response, i, task_id, friendly_message, error_type)
                     logger.info(f"MODEL: Added error to response - type: {error_type}, task_id: {task_id}")
                     
                 except Exception as log_error:

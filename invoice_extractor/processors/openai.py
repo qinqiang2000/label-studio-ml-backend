@@ -170,23 +170,45 @@ class OpenAIDocumentProcessor(DocumentProcessor):
         logger.info("Converted Gemini schema to OpenAI Structured Outputs format")
         return converted_schema
 
+    def _template_to_json_schema(self, template) -> Dict:
+        """
+        Convert Gemini-style field template (empty string values) to OpenAI-compatible JSON Schema.
+
+        Template format:
+          - "" or any scalar  → {"type": "string"}
+          - {...}             → {"type": "object", "properties": {...}}
+          - [{...}]           → {"type": "array", "items": {...}}
+        """
+        if isinstance(template, list):
+            items = self._template_to_json_schema(template[0]) if template else {"type": "string"}
+            return {"type": "array", "items": items}
+        elif isinstance(template, dict):
+            properties = {k: self._template_to_json_schema(v) for k, v in template.items()}
+            return {
+                "type": "object",
+                "properties": properties,
+                "required": list(properties.keys()),
+                "additionalProperties": False
+            }
+        else:
+            return {"type": "string"}
+
     def _create_response_format(self, response_schema: Optional[Dict]) -> Optional[Dict]:
         """
-        Create response_format for structured outputs
-        
-        Args:
-            response_schema: JSON schema for response format (Gemini format)
-            
-        Returns:
-            Formatted response_format dict for OpenAI API
+        Create response_format for structured outputs.
+
+        Handles both proper JSON Schema (has 'type' key) and Gemini-style
+        field templates (empty string values, no 'type' key).
         """
         if not response_schema:
             return None
-        
-        # Convert Gemini schema to OpenAI Structured Outputs format
-        openai_schema = self._convert_gemini_schema_to_openai(response_schema)
-        
-        # Standard OpenAI structured outputs format
+
+        # Gemini template: top-level dict without a 'type' key
+        if isinstance(response_schema, dict) and "type" not in response_schema:
+            openai_schema = self._template_to_json_schema(response_schema)
+        else:
+            openai_schema = self._convert_gemini_schema_to_openai(response_schema)
+
         return {
             "type": "json_schema",
             "json_schema": {
